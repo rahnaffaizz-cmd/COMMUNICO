@@ -1,0 +1,14 @@
+# Semua file teks disimpan dengan akhir baris LF di dalam repo,
+# supaya sama persis di Windows, Linux, maupun macOS.
+* text=auto eol=lf
+
+# File khusus Windows tetap CRLF, kalau tidak, cmd bisa salah membacanya.
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+
+# File biner jangan diutak-atik Git.
+*.pkl  binary
+*.jpg  binary
+*.jpeg binary
+*.png  binary
+*.mp3  binary

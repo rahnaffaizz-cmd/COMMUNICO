@@ -1,0 +1,20 @@
+# --- Python ------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# --- Editor ------------------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+
+# --- Windows -----------------------------------------------------------------
+Thumbs.db
+desktop.ini
+
+# --- Hasil sementara ---------------------------------------------------------
+# Suara gTTS sebenarnya disimpan di folder TEMP sistem, tapi kalau ada yang
+# menyalinnya ke sini, jangan ikut masuk repo.
+*.mp3
