@@ -1,0 +1,28 @@
+{
+  // Python yang dipakai: folder .venv di dalam proyek ini.
+  // Dibuat otomatis oleh setup.ps1, jadi biasanya tidak perlu diutak-atik.
+  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/Scripts/python.exe",
+
+  // Terminal di VS Code otomatis mengaktifkan .venv, jadi perintah "python"
+  // langsung menunjuk ke Python yang benar.
+  "python.terminal.activateEnvironment": true,
+
+  // Program ini butuh kamera dan jendela OpenCV, jadi harus jalan di terminal
+  // biasa, bukan di panel Output yang tidak bisa menerima tombol keyboard.
+  "python.terminal.launchArgs": [],
+
+  "files.exclude": {
+    "**/__pycache__": true,
+    "**/*.pyc": true
+  },
+
+  // Akhir baris disamakan dengan aturan di .gitattributes.
+  "files.eol": "\n",
+  "[powershell]": { "files.eol": "\r\n" },
+  "[bat]": { "files.eol": "\r\n" },
+
+  "editor.rulers": [88],
+  "editor.trimAutoWhitespace": true,
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true
+}

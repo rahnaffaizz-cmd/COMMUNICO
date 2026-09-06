@@ -5,8 +5,17 @@ __pycache__/
 venv/
 env/
 
-# --- Editor ------------------------------------------------------------------
-.vscode/
+# --- VS Code -----------------------------------------------------------------
+# Konfigurasi bersama (settings, launch, tasks, extensions) sengaja ikut masuk
+# repo supaya di komputer lain tinggal buka folder dan langsung jalan.
+# Yang diabaikan hanya file pribadi tiap orang.
+.vscode/*
+!.vscode/settings.json
+!.vscode/launch.json
+!.vscode/tasks.json
+!.vscode/extensions.json
+
+# --- Editor lain -------------------------------------------------------------
 .idea/
 *.swp
 

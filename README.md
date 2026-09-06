@@ -28,26 +28,33 @@ jalan, atau nama obat, ketika juru bahasa isyarat tidak tersedia.
 | `rf_bisindo_99.pkl` | model yang sudah dilatih (30 MB) |
 | `contoh/` | 4 foto isyarat untuk bahan uji coba |
 | `run.ps1` / `run.bat` | tinggal dijalankan, tidak perlu ketik path Python |
+| `setup.ps1` | pemasangan otomatis di komputer baru |
 | `requirements.txt` | daftar library yang dibutuhkan |
+| `.vscode/` | konfigurasi VS Code, sudah siap pakai |
 
 ---
 
-## Cara memasang
+## Memasang di komputer baru
 
 Butuh **Python 3.11 atau 3.12**. MediaPipe belum menyediakan versi untuk
 Python 3.13 ke atas, jadi versi yang lebih baru tidak akan bisa dipakai.
+Kalau di komputer itu belum ada Python sama sekali, pasang `uv` saja
+(`winget install astral-sh.uv`) — nanti Python 3.12-nya diunduh otomatis.
 
 ```powershell
 git clone https://github.com/IOH-AIRAN-Laboratory/gesture-voice.git
 cd gesture-voice
+.\setup.ps1
+```
 
-# cara cepat, pakai uv
-uv venv --python 3.12 .venv
-uv pip install --python .venv\Scripts\python.exe -r requirements.txt
+`setup.ps1` mengerjakan semuanya sendiri: mencari Python yang cocok, membuat
+`.venv`, memasang seluruh library, lalu menguji hasilnya pakai gambar contoh.
+Sekitar 600 MB yang diunduh, jadi siapkan koneksi yang lumayan.
 
-# atau cara biasa
-py -3.12 -m venv .venv
-.venv\Scripts\pip install -r requirements.txt
+Kalau PowerShell menolak menjalankan skrip, jalankan dulu satu baris ini:
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 ```
 
 > **Catatan penting soal versi.** `protobuf` wajib versi **4.25.3**. Mulai
@@ -58,6 +65,23 @@ py -3.12 -m venv .venv
 ---
 
 ## Cara menjalankan
+
+### Lewat VS Code
+
+Buka folder ini di VS Code. Konfigurasinya sudah ikut di dalam repo, jadi:
+
+- **F5** → pilih **"Jalankan program (pakai kamera)"**
+- Pilihan lain di panel Run and Debug: kamera 1, mode tanpa suara, atau uji
+  tanpa kamera
+- Lewat menu **Terminal → Run Task** ada tiga langkah berurutan:
+  1. Pasang (siapkan .venv + library)
+  2. Uji tanpa kamera
+  3. Jalankan program
+
+VS Code otomatis memakai Python dari `.venv` di folder ini, dan akan menawarkan
+pemasangan ekstensi Python kalau belum ada.
+
+### Lewat terminal
 
 ```powershell
 .\run.ps1

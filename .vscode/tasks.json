@@ -1,0 +1,48 @@
+{
+  // Buka lewat menu Terminal > Run Task, atau Ctrl+Shift+P lalu "Run Task".
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "1. Pasang (siapkan .venv + library)",
+      "detail": "Jalankan ini sekali saja waktu pertama kali di komputer baru",
+      "type": "shell",
+      "command": "powershell",
+      "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/setup.ps1"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": [],
+      "group": { "kind": "build", "isDefault": true },
+      "presentation": { "reveal": "always", "panel": "dedicated" }
+    },
+    {
+      "label": "2. Uji tanpa kamera",
+      "detail": "Cek model dan library sudah benar, pakai gambar di folder contoh",
+      "type": "shell",
+      "command": "${workspaceFolder}/.venv/Scripts/python.exe",
+      "args": ["uji_gambar.py"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": [],
+      "group": { "kind": "test", "isDefault": true },
+      "presentation": { "reveal": "always", "panel": "dedicated" }
+    },
+    {
+      "label": "3. Jalankan program",
+      "detail": "Buka kamera dan mulai mengenali huruf",
+      "type": "shell",
+      "command": "${workspaceFolder}/.venv/Scripts/python.exe",
+      "args": ["gesture_voice.py"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated" }
+    },
+    {
+      "label": "Lihat daftar pengaturan",
+      "detail": "Tampilkan semua argumen yang bisa dipakai",
+      "type": "shell",
+      "command": "${workspaceFolder}/.venv/Scripts/python.exe",
+      "args": ["gesture_voice.py", "-h"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated" }
+    }
+  ]
+}

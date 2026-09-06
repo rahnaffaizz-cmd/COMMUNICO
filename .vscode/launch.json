@@ -1,0 +1,44 @@
+{
+  // Tekan F5 untuk menjalankan. Pilih dulu konfigurasinya di panel Run and Debug.
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Jalankan program (pakai kamera)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/gesture_voice.py",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "justMyCode": true
+    },
+    {
+      "name": "Jalankan program (kamera 1)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/gesture_voice.py",
+      "args": ["--kamera", "1"],
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "justMyCode": true
+    },
+    {
+      "name": "Jalankan tanpa suara otomatis",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/gesture_voice.py",
+      "args": ["--tanpa-eja-huruf", "--tanpa-auto-ucap"],
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "justMyCode": true
+    },
+    {
+      "name": "Uji pakai gambar (tanpa kamera)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/uji_gambar.py",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "justMyCode": true
+    }
+  ]
+}
