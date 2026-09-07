@@ -35,6 +35,26 @@
       "presentation": { "reveal": "always", "panel": "dedicated" }
     },
     {
+      "label": "4. Ukur ketepatan model (tolok ukur jujur)",
+      "detail": "Bandingkan cara pengukuran yang keliru dengan yang benar. Butuh beberapa menit",
+      "type": "shell",
+      "command": "${workspaceFolder}/.venv/Scripts/python.exe",
+      "args": ["evaluasi.py"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated" }
+    },
+    {
+      "label": "4b. Ukur ketepatan (mode cepat)",
+      "detail": "Sama seperti di atas tapi 1 lipatan saja, hasilnya kasar",
+      "type": "shell",
+      "command": "${workspaceFolder}/.venv/Scripts/python.exe",
+      "args": ["evaluasi.py", "--cepat"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated" }
+    },
+    {
       "label": "Lihat daftar pengaturan",
       "detail": "Tampilkan semua argumen yang bisa dipakai",
       "type": "shell",

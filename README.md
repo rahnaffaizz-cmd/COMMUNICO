@@ -25,6 +25,7 @@ jalan, atau nama obat, ketika juru bahasa isyarat tidak tersedia.
 |---|---|
 | `gesture_voice.py` | program utama, pakai kamera |
 | `uji_gambar.py` | uji model pakai file gambar, tanpa kamera |
+| `evaluasi.py` | ukur ketepatan model secara jujur, jadi tolok ukur perbaikan |
 | `rf_bisindo_99.pkl` | model yang sudah dilatih (30 MB) |
 | `contoh/` | 4 foto isyarat untuk bahan uji coba |
 | `run.ps1` / `run.bat` | tinggal dijalankan, tidak perlu ketik path Python |
@@ -184,8 +185,57 @@ Diukur langsung, bukan perkiraan:
 
 ---
 
+## Seberapa tepat sebenarnya model ini?
+
+**Sekitar 46%, bukan 99%.** Nama berkas modelnya memang `rf_bisindo_99.pkl`,
+tapi angka 99 itu menyesatkan, dan ini penjelasannya.
+
+Dataset aslinya cuma **312 foto**, lalu diperbanyak lewat augmentasi jadi
+**14.493 sampel** — sekitar 46 salinan per foto. Pembagian data latih dan data
+uji dilakukan **setelah** augmentasi, secara acak. Akibatnya tiap sampel uji
+punya belasan sampai puluhan "saudara kembar" di data latih. Model tidak diuji
+kemampuannya mengenali, tapi kemampuannya mengingat.
+
+Buktinya, metode paling sederhana sekalipun (mencari tetangga terdekat) sudah
+dapat 99,31% di data uji itu — jarak sebuah sampel uji ke kembarannya cuma
+**3,1%** dari jarak antar huruf yang berbeda.
+
+Setelah salinan-salinan itu dikelompokkan kembali ke foto asalnya dan pembagian
+dilakukan per foto:
+
+| Cara mengukur | Akurasi | Macro F1 |
+|---|---|---|
+| Pembagian acak (cara pembuat model) | 99,55% | 99,53% |
+| **Pembagian per foto asli (jujur)** | **45,84%** | **37,46%** |
+
+Sembilan huruf di bawah 30%. Huruf **I** dan **Z** tidak pernah sekali pun benar
+pada foto yang belum pernah dilihat.
+
+Angka 46% itu pun masih terlalu optimis untuk pemakaian nyata, karena semua foto
+berasal dari orang, ruangan, dan pencahayaan yang sama.
+
+### Mengukur ulang sendiri
+
+```powershell
+.\.venv\Scripts\python evaluasi.py            # tolok ukur lengkap, beberapa menit
+.\.venv\Scripts\python evaluasi.py --cepat    # gambaran kasar, jauh lebih cepat
+.\.venv\Scripts\python evaluasi.py --model model_baru.pkl   # nilai model lain
+```
+
+Di VS Code ada di **Terminal → Run Task → "4. Ukur ketepatan model"**.
+
+Data ujinya (23 MB) diunduh otomatis sekali saja ke folder `data/`.
+
+**Gunakan ini sebagai pembanding setiap kali ada model baru.** Kalau model baru
+tidak mengalahkan 45,84% pada pembagian per foto, berarti belum ada perbaikan
+nyata — seberapa pun bagusnya angka yang keluar dari pembagian acak.
+
+---
+
 ## Batasan yang perlu diketahui
 
+- **Ketepatannya sekitar 46% pada foto baru**, jauh di bawah kesan yang
+  diberikan nama berkasnya. Lihat bagian di atas.
 - Model ini hanya mengenali **26 huruf diam**. Huruf **J, R, dan Y** di BISINDO
   dibuat dengan gerakan, jadi hasilnya tidak bisa diandalkan.
 - Paling akurat kalau latar belakangnya polos dan tangan terlihat penuh,

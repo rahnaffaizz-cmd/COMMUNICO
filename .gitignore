@@ -23,6 +23,11 @@ env/
 Thumbs.db
 desktop.ini
 
+# --- Data untuk evaluasi -----------------------------------------------------
+# Berkas ini besar (23 MB) dan diunduh otomatis oleh evaluasi.py saat pertama
+# dipakai, jadi tidak perlu ikut disimpan di repo.
+data/
+
 # --- Hasil sementara ---------------------------------------------------------
 # Suara gTTS sebenarnya disimpan di folder TEMP sistem, tapi kalau ada yang
 # menyalinnya ke sini, jangan ikut masuk repo.
