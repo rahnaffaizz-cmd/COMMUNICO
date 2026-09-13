@@ -30,12 +30,14 @@ import argparse
 import hashlib
 import json
 import queue
+import shutil
+import subprocess
+import sys
 import tempfile
 import threading
 import time
 import warnings
 from collections import Counter, deque
-from ctypes import c_buffer, windll
 from pathlib import Path
 
 import cv2
@@ -62,11 +64,38 @@ HURUF_FONT = cv2.FONT_HERSHEY_SIMPLEX
 
 
 # ------------------------------------------------------------------ suara / TTS
+WINDOWS = sys.platform == "win32"
+
+
 def _perintah_mci(perintah: str) -> str:
     """Kirim satu perintah ke pemutar bawaan Windows (winmm) dan ambil balasannya."""
+    from ctypes import c_buffer, windll        # khusus Windows, diimpor saat dipakai
+
     penampung = c_buffer(255)
     windll.winmm.mciSendStringW(perintah, penampung, 254, 0)
     return penampung.value
+
+
+def cari_pemutar() -> list[str] | None:
+    """Cari program pemutar mp3 yang tersedia di sistem ini.
+
+    Windows memakai pemutar bawaannya sendiri lewat winmm, jadi tidak perlu
+    program tambahan. Di Linux, termasuk Raspberry Pi, dicari berurutan
+    program yang paling umum terpasang.
+    """
+    if WINDOWS:
+        return None
+
+    pilihan = [
+        (["mpg123", "-q"], "mpg123"),
+        (["ffplay", "-nodisp", "-autoexit", "-loglevel", "quiet"], "ffplay"),
+        (["cvlc", "--play-and-exit", "--intf", "dummy"], "cvlc"),
+        (["mpv", "--really-quiet"], "mpv"),
+    ]
+    for perintah, program in pilihan:
+        if shutil.which(program):
+            return perintah
+    return None
 
 
 class Pengucap:
@@ -86,6 +115,14 @@ class Pengucap:
         self._antrian: queue.Queue[str | None] = queue.Queue()
         self._sedang_bicara = threading.Event()
         self._sudah_pernah_lapor = False
+
+        # Di luar Windows perlu program pemutar mp3 dari luar.
+        self.pemutar = cari_pemutar()
+        self._sudah_lapor_pemutar = False
+        if not WINDOWS and catat:
+            catat.kabar("SUARA", f"pemutar mp3: "
+                                 f"{' '.join(self.pemutar) if self.pemutar else 'TIDAK ADA'}")
+
         self._thread = threading.Thread(target=self._jalan, daemon=True)
         self._thread.start()
 
@@ -117,13 +154,27 @@ class Pengucap:
             return False
 
     def _putar(self, path: Path) -> None:
-        """Putar file mp3 sampai selesai."""
-        nama = f"gv{threading.get_ident()}"
-        _perintah_mci(f'open "{path}" type mpegvideo alias {nama}')
-        try:
-            _perintah_mci(f"play {nama} wait")
-        finally:
-            _perintah_mci(f"close {nama}")
+        """Putar file mp3 sampai selesai, dengan cara yang sesuai sistemnya."""
+        if WINDOWS:
+            # Pemutar bawaan Windows, tidak perlu program tambahan.
+            nama = f"gv{threading.get_ident()}"
+            _perintah_mci(f'open "{path}" type mpegvideo alias {nama}')
+            try:
+                _perintah_mci(f"play {nama} wait")
+            finally:
+                _perintah_mci(f"close {nama}")
+            return
+
+        # Linux, termasuk Raspberry Pi: panggil program pemutar dari luar.
+        if self.pemutar is None:
+            if not self._sudah_lapor_pemutar:
+                print("Tidak ada program pemutar mp3. Pasang salah satu:\n"
+                      "  sudo apt install mpg123\n"
+                      "  sudo apt install ffmpeg")
+                self._sudah_lapor_pemutar = True
+            return
+        subprocess.run([*self.pemutar, str(path)], check=False,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     def _jalan(self) -> None:
         """Loop di thread: ambil teks dari antrian, bunyikan, ulangi."""
@@ -340,6 +391,10 @@ def baca_argumen() -> argparse.Namespace:
                    help="ambang MediaPipe untuk mulai mendeteksi tangan")
     p.add_argument("--keyakinan-tracking", type=float, default=0.5,
                    help="ambang MediaPipe untuk terus mengikuti tangan")
+    p.add_argument("--model", default=PATH_MODEL,
+                   help="berkas model yang dipakai. Ganti ke versi lama kalau "
+                        "versi baru ternyata lebih buruk, misalnya "
+                        "--model rf_bisindo_v2.pkl")
     p.add_argument("--ukur", metavar="HURUF", default=None,
                    help="mode pengukuran: peragakan satu huruf terus-menerus, "
                         "nanti dilaporkan seberapa baik huruf itu terbaca oleh "
@@ -430,8 +485,15 @@ def utama() -> int:
 
     catat = Pencatat(aktif=not arg.tanpa_catatan, detail=arg.catat_detail)
 
-    model = joblib.load(PATH_MODEL)
-    catat.mulai(PATH_MODEL, model.n_features_in_, "".join(model.classes_),
+    berkas_model = Path(__file__).resolve().parent / arg.model
+    if not berkas_model.exists():
+        print(f"GAGAL: berkas model '{arg.model}' tidak ada.")
+        tersedia = sorted(p.name for p in berkas_model.parent.glob("*.pkl"))
+        print(f"Yang tersedia: {', '.join(tersedia)}")
+        return 1
+
+    model = joblib.load(berkas_model)
+    catat.mulai(arg.model, model.n_features_in_, "".join(model.classes_),
                 arg.bahasa, arg.kamera)
 
     ambang_huruf = {} if arg.ambang_seragam else muat_ambang_huruf(catat)
@@ -458,8 +520,10 @@ def utama() -> int:
         catat.kabar("UKUR", f"ambang {target} yang berlaku sekarang: "
                             f"{pengukur.ambang_berlaku:.2f}")
 
-    # CAP_DSHOW dipakai supaya kamera di Windows kebuka lebih cepat.
-    kamera = cv2.VideoCapture(arg.kamera, cv2.CAP_DSHOW)
+    # Di Windows, CAP_DSHOW membuat kamera kebuka jauh lebih cepat. Di Linux,
+    # termasuk Raspberry Pi, backend itu tidak ada, jadi dipakai yang bawaan.
+    kamera = (cv2.VideoCapture(arg.kamera, cv2.CAP_DSHOW) if WINDOWS
+              else cv2.VideoCapture(arg.kamera))
     if not kamera.isOpened():
         print(f"GAGAL: kamera {arg.kamera} tidak bisa dibuka. "
               f"Coba --kamera 1, atau tutup aplikasi lain yang sedang memakai kamera.")

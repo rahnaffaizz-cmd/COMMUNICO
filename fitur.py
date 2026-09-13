@@ -26,8 +26,11 @@ SUSUNAN ANGKANYA
 ----------------
 Masukan  : 126 angka, susunannya x,y,z per titik, titik 0-20 tangan pertama
            lalu titik 21-41 tangan kedua. Tangan yang tidak terlihat diisi nol.
-Keluaran : 162 angka, yaitu 126 titik yang sudah dinormalkan ditambah 36 ukuran
-           geometris (18 per tangan).
+Keluaran : 169 angka, disusun bertingkat supaya model versi lama tetap bisa
+           dipakai dengan memotong bagian belakangnya:
+             0-125    titik yang sudah dinormalkan
+             126-161  ukuran geometris jari, 18 per tangan   -> sampai sini 162
+             162-168  letak relatif antar tangan             -> sampai sini 169
 
 Berkas ini dipakai bersama oleh latih.py, gesture_voice.py, dan uji_gambar.py,
 supaya perhitungannya dijamin sama persis. Kalau berkas ini diubah, modelnya
@@ -40,7 +43,7 @@ import numpy as np
 
 JUMLAH_TITIK = 21
 PANJANG_MASUKAN = 126
-PANJANG_KELUARAN = 166
+PANJANG_KELUARAN = 169
 
 # Pasangan (pangkal, ujung) tiap jari: jempol, telunjuk, tengah, manis, kelingking
 JARI = [(2, 4), (5, 8), (9, 12), (13, 16), (17, 20)]
@@ -117,7 +120,7 @@ def _ukuran_geometris(titik: np.ndarray) -> list[np.ndarray]:
 
 
 def _posisi_relatif(mentah_titik: np.ndarray) -> np.ndarray:
-    """Letak tangan kedua terhadap tangan pertama: 4 angka.
+    """Letak tangan kedua terhadap tangan pertama: 7 angka.
 
     Ini WAJIB dihitung dari koordinat MENTAH, sebelum tiap tangan digeser ke
     pergelangannya masing-masing. Setelah digeser, kedua tangan sama-sama
@@ -125,15 +128,27 @@ def _posisi_relatif(mentah_titik: np.ndarray) -> np.ndarray:
 
     Padahal untuk huruf dua tangan, letak relatif itulah yang membedakan.
     Contohnya A dan S: keduanya dua tangan dengan bentuk jari mirip, bedanya
-    A kedua tangannya sejajar kiri-kanan, sedangkan S tersusun atas-bawah.
+    A kedua tangannya SEJAJAR kiri-kanan, sedangkan S tersusun ATAS-BAWAH.
     Tanpa angka ini, model mustahil membedakan keduanya.
 
-    Isinya: selisih letak pergelangan (x, y, z) dan jaraknya, semuanya
-    diskalakan dengan ukuran tangan pertama supaya tidak bergantung pada
-    seberapa dekat orangnya ke kamera.
+    Isi ketujuh angkanya:
+      0-2  selisih letak pergelangan (x, y, z)
+      3    jarak antar pergelangan
+      4    sudut arah selisih itu pada bidang layar
+      5    seberapa tegak susunannya, 0 berarti sejajar dan 1 berarti bertumpuk
+      6    selisih arah hadap kedua tangan
+
+    Angka 4 dan 5 sebenarnya bisa dihitung sendiri oleh model dari angka 0
+    dan 1. Tetapi pohon keputusan memisahkan data dengan garis tegak lurus
+    sumbu, jadi untuk mengenali "sejajar atau bertumpuk" ia harus menyusun
+    banyak percabangan x dan y sekaligus. Kalau sudutnya diberikan langsung,
+    satu percabangan saja sudah cukup. Inilah inti perbaikan versi ini.
+
+    Semuanya diskalakan dengan ukuran tangan pertama supaya tidak bergantung
+    pada seberapa dekat orangnya ke kamera.
     """
     banyak = len(mentah_titik)
-    hasil = np.zeros((banyak, 4), dtype=np.float32)
+    hasil = np.zeros((banyak, 7), dtype=np.float32)
 
     tangan1 = mentah_titik[:, 0]
     tangan2 = mentah_titik[:, 1]
@@ -147,8 +162,25 @@ def _posisi_relatif(mentah_titik: np.ndarray) -> np.ndarray:
     ukuran[ukuran < 1e-6] = 1.0
 
     selisih = (tangan2[:, 0] - tangan1[:, 0]) / ukuran[:, None]
+    dx, dy = selisih[:, 0], selisih[:, 1]
+
     hasil[dua_tangan, :3] = selisih[dua_tangan]
     hasil[dua_tangan, 3] = np.linalg.norm(selisih[dua_tangan], axis=1)
+
+    # Sudut arah selisih. Mendekati 0 atau pi kalau sejajar kiri-kanan,
+    # mendekati setengah pi kalau bertumpuk atas-bawah.
+    hasil[dua_tangan, 4] = np.arctan2(dy[dua_tangan], dx[dua_tangan])
+
+    # Ukuran ketegakan yang tidak terpengaruh arah kiri atau kanan. Nilai 0
+    # berarti benar-benar sejajar, 1 berarti benar-benar bertumpuk.
+    mendatar = np.abs(dx) + np.abs(dy) + 1e-8
+    hasil[dua_tangan, 5] = (np.abs(dy) / mendatar)[dua_tangan]
+
+    # Selisih arah hadap kedua tangan, diukur dari pergelangan ke pangkal jari
+    # tengah. Membedakan tangan yang menghadap sama dengan yang berlawanan.
+    arah1 = tangan1[:, 9] - tangan1[:, 0]
+    arah2 = tangan2[:, 9] - tangan2[:, 0]
+    hasil[dua_tangan, 6] = _sudut(arah1, arah2)[dua_tangan]
     return hasil
 
 

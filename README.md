@@ -30,6 +30,8 @@ jalan, atau nama obat, ketika juru bahasa isyarat tidak tersedia.
 | `diagnosa.py` | memeriksa tiap huruf dan mencari ambang keyakinan terbaiknya |
 | `ambang_huruf.json` | ambang keyakinan per huruf, dipakai otomatis |
 | `AKURASI.md` | catatan ketepatan tiap huruf beserta cara mengukurnya |
+| `VERSI_MODEL.md` | daftar versi model dan cara kembali ke versi lama |
+| `putar_ulang.py` | bandingkan beberapa model pada rekaman sesi yang sama |
 | `latih.py` | melatih ulang model dan membandingkannya dengan yang lama |
 | `evaluasi.py` | ukur ketepatan model secara jujur, jadi tolok ukur perbaikan |
 | `rf_bisindo_v2.pkl` | **model yang dipakai sekarang** (10 MB) |
