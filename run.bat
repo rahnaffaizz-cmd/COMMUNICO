@@ -1,6 +1,16 @@
 @echo off
 rem Klik dua kali file ini untuk menjalankan pengenal huruf BISINDO bersuara.
-rem Bisa juga lewat cmd, misalnya:  run.bat --kamera 1 --bahasa en
+rem
+rem Bisa juga lewat cmd dengan pengaturan tambahan:
+rem   run.bat --kamera 1              kalau kamera yang kebuka salah
+rem   run.bat --bahasa en --pelan     suara bahasa Inggris, dibaca pelan
+rem   run.bat --min-keyakinan 0.6     lebih ketat, biar tidak gampang salah
+rem   run.bat --ambang-seragam        abaikan ambang per huruf
+rem   run.bat --catat-detail          catat tiap tebakan beserta pesaingnya
+rem   run.bat --ukur I                ukur seberapa baik huruf I terbaca
+rem
+rem Daftar lengkap:  run.bat -h
+rem Untuk menguji tanpa kamera, pakai PowerShell:  .\run.ps1 -Uji
 setlocal
 cd /d "%~dp0"
 

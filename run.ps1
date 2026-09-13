@@ -1,11 +1,28 @@
 # Menjalankan pengenal huruf BISINDO yang bisa bersuara (Google TTS).
 #
-#   .\run.ps1                       jalan biasa, suara bahasa Indonesia
+# Menjalankan biasa
+#   .\run.ps1                       suara bahasa Indonesia
 #   .\run.ps1 --kamera 1            kalau kamera yang kebuka salah
 #   .\run.ps1 --bahasa en --pelan   suara bahasa Inggris, dibaca pelan
 #   .\run.ps1 --tanpa-eja-huruf     cuma kata yang dibunyikan, hurufnya tidak
+#
+# Kalau hurufnya susah masuk atau malah salah masuk
 #   .\run.ps1 --min-keyakinan 0.6   lebih ketat, biar tidak gampang salah huruf
-#   .\run.ps1 -Uji                  uji pakai gambar di folder contoh, tanpa kamera
+#   .\run.ps1 --ambang-seragam      abaikan ambang per huruf di ambang_huruf.json,
+#                                   huruf yang biasanya ditolak jadi ikut masuk
+#
+# Kalau ingin tahu apa yang sebenarnya terjadi
+#   .\run.ps1 --catat-detail        catat tiap tebakan beserta pesaingnya, dan
+#                                   alasan kenapa sebuah huruf belum diterima
+#   .\run.ps1 --ukur I              peragakan huruf I terus-menerus, nanti
+#                                   dilaporkan seberapa baik huruf itu terbaca
+#                                   oleh kamera Anda sendiri
+#
+# Menguji tanpa kamera
+#   .\run.ps1 -Uji                  pakai gambar di folder contoh
+#   .\run.ps1 -Uji "C:\foto\saya"   pakai gambar di folder lain
+#
+# Daftar lengkap:  .\run.ps1 -h
 param(
     [switch]$Uji,
     [Parameter(ValueFromRemainingArguments = $true)] $Args
