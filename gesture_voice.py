@@ -520,7 +520,8 @@ def utama() -> int:
                     # laporannya menggambarkan keadaan sebenarnya.
                     i_target = list(model.classes_).index(pengukur.target)
                     pengukur.catat_frame(tebakan, keyakinan,
-                                         float(peluang[i_target]), tiga_besar)
+                                         float(peluang[i_target]), tiga_besar,
+                                         jumlah_tangan)
 
                 huruf_diterima = voting.masukkan(tebakan, keyakinan, sekarang)
                 if huruf_diterima:

@@ -43,9 +43,11 @@ class PengukurHuruf:
         self._baris: list[dict] = []
 
     def catat_frame(self, tebakan_teratas: str, keyakinan_teratas: float,
-                    peluang_target: float, tiga_besar: list) -> None:
+                    peluang_target: float, tiga_besar: list,
+                    jumlah_tangan: int = 0) -> None:
         self._baris.append({
             "detik": (datetime.now() - self.mulai).total_seconds(),
+            "tangan": jumlah_tangan,
             "tebakan": tebakan_teratas,
             "yakin_tebakan": keyakinan_teratas,
             "yakin_target": peluang_target,
@@ -114,6 +116,32 @@ class PengukurHuruf:
                 t(f"    {huruf}: {jumlah} frame ({jumlah / n * 100:.1f}%)")
         else:
             t(f"  {self.target} selalu jadi tebakan teratas, tidak ada pesaing.")
+
+        # Jumlah tangan sangat menentukan. Beberapa huruf di dataset dipelajari
+        # sebagai huruf satu tangan, yang lain dua tangan. Kalau tangan kedua
+        # ikut terbaca padahal tidak dimaksudkan, tebakannya bisa melenceng
+        # ke huruf dua tangan yang sama sekali berbeda.
+        tangan = [b["tangan"] for b in self._baris]
+        hitung_tangan = {j: tangan.count(j) for j in sorted(set(tangan))}
+        if len(hitung_tangan) > 0:
+            t("")
+            t("  Jumlah tangan yang terbaca kamera:")
+            for jumlah, berapa in hitung_tangan.items():
+                t(f"    {jumlah} tangan: {berapa} frame ({berapa / n * 100:.1f}%)")
+
+            # Kalau jumlah tangannya berubah-ubah, bandingkan hasilnya.
+            if len(hitung_tangan) > 1:
+                t("")
+                t("  Ketepatan dipisah menurut jumlah tangan:")
+                for jumlah in hitung_tangan:
+                    pilih = [b for b in self._baris if b["tangan"] == jumlah]
+                    tepat = sum(1 for b in pilih if b["tebakan"] == self.target)
+                    rata = np.mean([b["yakin_target"] for b in pilih])
+                    t(f"    {jumlah} tangan: {tepat}/{len(pilih)} benar "
+                      f"({tepat / len(pilih) * 100:.1f}%), keyakinan {rata:.2f}")
+                t("")
+                t("  Kalau salah satunya jauh lebih baik, usahakan peragaannya")
+                t("  konsisten memakai jumlah tangan itu saja.")
 
         # Bagaimana nasibnya dengan ambang yang berlaku sekarang.
         t("")
