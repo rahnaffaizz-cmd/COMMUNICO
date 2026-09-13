@@ -45,6 +45,7 @@ import numpy as np
 
 from catatan import Pencatat
 from fitur import ambil_fitur
+from pengukur import PengukurHuruf
 
 # Dua peringatan ini cuma berisik di layar, tidak bikin program rusak.
 warnings.filterwarnings("ignore", message="X does not have valid feature names")
@@ -339,6 +340,10 @@ def baca_argumen() -> argparse.Namespace:
                    help="ambang MediaPipe untuk mulai mendeteksi tangan")
     p.add_argument("--keyakinan-tracking", type=float, default=0.5,
                    help="ambang MediaPipe untuk terus mengikuti tangan")
+    p.add_argument("--ukur", metavar="HURUF", default=None,
+                   help="mode pengukuran: peragakan satu huruf terus-menerus, "
+                        "nanti dilaporkan seberapa baik huruf itu terbaca oleh "
+                        "kamera Anda sendiri. Contoh: --ukur I")
     p.add_argument("--ambang-seragam", action="store_true",
                    help="abaikan ambang_huruf.json, pakai --min-keyakinan untuk "
                         "semua huruf. Huruf yang biasanya ditolak jadi ikut masuk")
@@ -431,6 +436,19 @@ def utama() -> int:
                          arg.min_keyakinan, arg.jeda, catat=catat,
                          ambang_huruf=ambang_huruf)
 
+    # Mode pengukuran satu huruf.
+    pengukur = None
+    if arg.ukur:
+        target = arg.ukur.strip().upper()
+        if target not in model.classes_:
+            print(f"GAGAL: '{target}' bukan huruf yang dikenali model.")
+            return 1
+        pengukur = PengukurHuruf(target, voting.ambang_untuk(target))
+        catat.kabar("UKUR", f"mode pengukuran huruf {target}. Peragakan huruf itu "
+                            f"terus-menerus, lalu tekan Q untuk melihat hasilnya.")
+        catat.kabar("UKUR", f"ambang {target} yang berlaku sekarang: "
+                            f"{pengukur.ambang_berlaku:.2f}")
+
     # CAP_DSHOW dipakai supaya kamera di Windows kebuka lebih cepat.
     kamera = cv2.VideoCapture(arg.kamera, cv2.CAP_DSHOW)
     if not kamera.isOpened():
@@ -494,6 +512,13 @@ def utama() -> int:
                 tiga_besar = [(model.classes_[i], float(peluang[i])) for i in urut]
                 catat.tebakan(tebakan, keyakinan, tiga_besar[1:])
 
+                if pengukur is not None:
+                    # Semua frame direkam apa adanya, termasuk yang salah, supaya
+                    # laporannya menggambarkan keadaan sebenarnya.
+                    i_target = list(model.classes_).index(pengukur.target)
+                    pengukur.catat_frame(tebakan, keyakinan,
+                                         float(peluang[i_target]), tiga_besar)
+
                 huruf_diterima = voting.masukkan(tebakan, keyakinan, sekarang)
                 if huruf_diterima:
                     teks += huruf_diterima
@@ -537,6 +562,11 @@ def utama() -> int:
                 tiga_besar=tiga_besar,
             )
 
+            if pengukur is not None:
+                # Angka berjalan supaya Anda tahu kapan datanya sudah cukup.
+                cv2.putText(frame, pengukur.ringkas_singkat(), (20, 95),
+                            HURUF_FONT, 0.6, KUNING, 2)
+
             cv2.imshow("BISINDO ke Suara   (tekan Q untuk keluar)", frame)
 
             tombol = cv2.waitKey(1) & 0xFF
@@ -566,6 +596,12 @@ def utama() -> int:
         pendeteksi.close()
         kamera.release()
         cv2.destroyAllWindows()
+
+    if pengukur is not None:
+        print(pengukur.laporan())
+        rincian = pengukur.simpan_rincian()
+        if rincian:
+            print(f"\nRincian tiap frame tersimpan di log/{rincian.name}")
 
     return 0
 
