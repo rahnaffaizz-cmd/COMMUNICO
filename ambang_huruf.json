@@ -1,7 +1,7 @@
 {
   "target_presisi": 80.0,
   "ambang": {
-    "A": 0.79,
+    "A": 0.42,
     "B": 0.99,
     "C": 0.51,
     "D": 0.99,
@@ -30,6 +30,7 @@
   },
   "keterangan": "Ambang keyakinan per huruf, dibuat oleh diagnosa.py. Nilai 0.99 berarti huruf itu ditolak.",
   "catatan_penyetelan": {
-    "I": "Disetel manual 2026-09-13 berdasarkan pemakaian nyata dengan kamera pengguna, bukan dari dataset. Terbaca 0.40 dengan pesaing U 0.19, dan J tidak muncul sama sekali. Di dataset Kaggle huruf I selalu kalah oleh J, tapi itu ternyata tidak terjadi di kondisi nyata."
+    "I": "Disetel manual 2026-09-13 berdasarkan pemakaian nyata dengan kamera pengguna, bukan dari dataset. Terbaca 0.40 dengan pesaing U 0.19, dan J tidak muncul sama sekali. Di dataset Kaggle huruf I selalu kalah oleh J, tapi itu ternyata tidak terjadi di kondisi nyata.",
+    "A": "Disetel 2026-09-13 dari data sesi nyata (log/sesi_20260913_122333.csv). Ambang lama 0.79 membuat A tidak pernah lolos sekali pun dari 167 frame, padahal keyakinan rata-ratanya 0.40, lebih tinggi daripada S yang 0.36 tapi lolos 97 persen karena ambangnya cuma 0.20. Ada rentetan A stabil selama 10 detik pada keyakinan 0.46 yang seharusnya diterima. Ambang 0.42 dipilih supaya rentetan kuat itu lolos sementara rentetan lemah pada 0.30 tetap ditolak."
   }
 }
