@@ -62,8 +62,10 @@ ALAMAT_FITUR = (
 AMBANG_KELOMPOK = 1.0
 
 # Angka acuan hasil pengukuran sebelumnya, dipakai sebagai pembanding.
-ACUAN_ACAK = 99.55
-ACUAN_JUJUR = 45.84
+# Semuanya diukur dengan pembagian per foto asli, kecuali yang ditandai acak.
+ACUAN_ACAK = 99.55          # fitur mentah, pembagian acak (angka menyesatkan)
+ACUAN_JUJUR = 46.52         # fitur mentah, pembagian per foto (model lama)
+ACUAN_FITUR_BARU = 61.84    # fitur dinormalkan + ukuran jari (model v2, dipakai sekarang)
 
 
 def judul(teks: str) -> None:
@@ -206,6 +208,11 @@ def tolok_ukur(X, y, grup, cepat: bool) -> None:
     print(f"  selisih             : {(acak - jujur) * 100:6.2f} poin persen")
     print(f"\n  Acuan pengukuran sebelumnya: {ACUAN_ACAK}% dan {ACUAN_JUJUR}%.")
     print("  Kalau angka di atas jauh berbeda, berarti ada yang berubah.")
+    print()
+    print("  CATATAN: angka di atas memakai fitur MENTAH, yaitu cara lama.")
+    print(f"  Model yang dipakai program sekarang memakai fitur olahan dari")
+    print(f"  fitur.py dan mencapai {ACUAN_FITUR_BARU}%. Untuk mengukurnya,")
+    print("  jalankan: python latih.py")
 
     tampilkan_per_huruf(benar, total)
 
@@ -232,10 +239,23 @@ def nilai_satu_model(path_model: Path, X, y, grup) -> None:
         sys.exit(1)
 
     model = joblib.load(path_model)
+    jumlah_fitur = getattr(model, "n_features_in_", None)
+
     judul(f"MENILAI {path_model.name}")
     print(f"  jenis  : {type(model).__name__}")
-    print(f"  fitur  : {getattr(model, 'n_features_in_', '?')}")
+    print(f"  fitur  : {jumlah_fitur}")
     print(f"  huruf  : {''.join(getattr(model, 'classes_', []))}\n")
+
+    # Model yang butuh 162 angka berarti memakai fitur olahan dari fitur.py,
+    # jadi datanya harus diolah dulu sebelum disuapkan.
+    if jumlah_fitur == 162:
+        from fitur import ambil_fitur
+        print("  Model ini memakai fitur olahan, data diproses lewat fitur.py dulu.\n")
+        X = ambil_fitur(X)
+    elif jumlah_fitur != 126:
+        print(f"  Model ini butuh {jumlah_fitur} angka, sedangkan data yang ada")
+        print("  menyediakan 126 (mentah) atau 162 (olahan). Tidak bisa dinilai.")
+        sys.exit(1)
 
     print("  PERINGATAN PENTING")
     print("  Angka di bawah hanya berarti kalau model ini dilatih dengan data LAIN.")

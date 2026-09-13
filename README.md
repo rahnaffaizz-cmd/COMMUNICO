@@ -25,8 +25,11 @@ jalan, atau nama obat, ketika juru bahasa isyarat tidak tersedia.
 |---|---|
 | `gesture_voice.py` | program utama, pakai kamera |
 | `uji_gambar.py` | uji model pakai file gambar, tanpa kamera |
+| `fitur.py` | mengubah titik tangan jadi angka yang dipelajari model |
+| `latih.py` | melatih ulang model dan membandingkannya dengan yang lama |
 | `evaluasi.py` | ukur ketepatan model secara jujur, jadi tolok ukur perbaikan |
-| `rf_bisindo_99.pkl` | model yang sudah dilatih (30 MB) |
+| `rf_bisindo_v2.pkl` | **model yang dipakai sekarang** (10 MB) |
+| `rf_bisindo_99.pkl` | model lama, disimpan untuk pembanding (30 MB) |
 | `contoh/` | 4 foto isyarat untuk bahan uji coba |
 | `run.ps1` / `run.bat` | tinggal dijalankan, tidak perlu ketik path Python |
 | `setup.ps1` | pemasangan otomatis di komputer baru |
@@ -201,41 +204,68 @@ dapat 99,31% di data uji itu — jarak sebuah sampel uji ke kembarannya cuma
 **3,1%** dari jarak antar huruf yang berbeda.
 
 Setelah salinan-salinan itu dikelompokkan kembali ke foto asalnya dan pembagian
-dilakukan per foto:
+dilakukan per foto, angkanya jatuh jauh.
+
+### Perbaikan yang sudah dilakukan
+
+Ternyata penyebab utamanya bukan cuma datanya sedikit, tapi juga **bentuk
+fiturnya**. Model lama disuapi koordinat mentah posisi tangan di layar (nilai
+0 sampai 1), jadi yang dipelajari adalah "tangan ada di posisi ini", bukan
+"tangan berbentuk ini". Begitu orangnya bergeser atau berdiri lebih dekat,
+angkanya berubah semua.
+
+Perbaikannya ada di `fitur.py`: pergelangan digeser ke titik nol lalu
+diskalakan, kemudian ditambah ukuran geometris jari (jarak antar ujung jari,
+sudut tekukan, sudut renggang).
 
 | Cara mengukur | Akurasi | Macro F1 |
 |---|---|---|
-| Pembagian acak (cara pembuat model) | 99,55% | 99,53% |
-| **Pembagian per foto asli (jujur)** | **45,84%** | **37,46%** |
+| Pembagian acak, fitur mentah (klaim asli) | 99,55% | 99,53% |
+| Pembagian per foto, fitur mentah (model lama) | 46,52% | 38,22% |
+| **Pembagian per foto, fitur olahan (model sekarang)** | **61,84%** | **55,96%** |
 
-Sembilan huruf di bawah 30%. Huruf **I** dan **Z** tidak pernah sekali pun benar
-pada foto yang belum pernah dilihat.
+Naik **15,3 poin** akurasi dan **17,7 poin** macro F1, tanpa menambah data sama
+sekali. Huruf **Z** yang tadinya tidak pernah benar sekarang 94%. Huruf **G**
+100%, **J** 99,7%, **R** 99,2%.
 
-Angka 46% itu pun masih terlalu optimis untuk pemakaian nyata, karena semua foto
-berasal dari orang, ruangan, dan pencahayaan yang sama.
+Yang masih bermasalah: **I** dan **E** hampir tidak pernah benar, dan **M**,
+**C**, **N**, **D**, **A**, **H**, **B** masih di bawah 40%.
+
+Angka 62% itu pun masih terlalu optimis untuk pemakaian nyata, karena semua foto
+berasal dari orang, ruangan, dan pencahayaan yang sama. Untuk memperbaikinya
+lebih jauh, yang dibutuhkan adalah **data dari lebih banyak orang**, bukan lebih
+banyak foto dari orang yang sama.
 
 ### Mengukur ulang sendiri
 
 ```powershell
-.\.venv\Scripts\python evaluasi.py            # tolok ukur lengkap, beberapa menit
+.\.venv\Scripts\python latih.py               # latih ulang + bandingkan, lalu simpan
+.\.venv\Scripts\python evaluasi.py            # tolok ukur fitur lama, beberapa menit
 .\.venv\Scripts\python evaluasi.py --cepat    # gambaran kasar, jauh lebih cepat
-.\.venv\Scripts\python evaluasi.py --model model_baru.pkl   # nilai model lain
+.\.venv\Scripts\python evaluasi.py --model lain.pkl   # nilai berkas model lain
 ```
 
 Di VS Code ada di **Terminal → Run Task → "4. Ukur ketepatan model"**.
 
 Data ujinya (23 MB) diunduh otomatis sekali saja ke folder `data/`.
 
-**Gunakan ini sebagai pembanding setiap kali ada model baru.** Kalau model baru
-tidak mengalahkan 45,84% pada pembagian per foto, berarti belum ada perbaikan
-nyata — seberapa pun bagusnya angka yang keluar dari pembagian acak.
+**Gunakan ini sebagai pembanding setiap kali ada model baru.** `latih.py` bahkan
+menolak menyimpan model kalau hasilnya lebih buruk dari yang lama. Kalau model
+baru tidak mengalahkan **61,84%** pada pembagian per foto, berarti belum ada
+perbaikan nyata — seberapa pun bagusnya angka yang keluar dari pembagian acak.
+
+> **Kalau `fitur.py` diubah, modelnya wajib dilatih ulang.** Program utama dan
+> `latih.py` memakai berkas yang sama persis supaya perhitungannya dijamin
+> sama. Kalau keduanya sampai berbeda, model akan menebak ngawur walaupun angka
+> latihannya bagus.
 
 ---
 
 ## Batasan yang perlu diketahui
 
-- **Ketepatannya sekitar 46% pada foto baru**, jauh di bawah kesan yang
-  diberikan nama berkasnya. Lihat bagian di atas.
+- **Ketepatannya sekitar 62% pada foto baru.** Sudah naik dari 46%, tapi masih
+  jauh dari sempurna. Lihat bagian di atas.
+- Huruf **I** dan **E** hampir tidak pernah dikenali dengan benar.
 - Model ini hanya mengenali **26 huruf diam**. Huruf **J, R, dan Y** di BISINDO
   dibuat dengan gerakan, jadi hasilnya tidak bisa diandalkan.
 - Paling akurat kalau latar belakangnya polos dan tangan terlihat penuh,

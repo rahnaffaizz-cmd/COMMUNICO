@@ -42,11 +42,13 @@ import joblib
 import mediapipe as mp
 import numpy as np
 
+from fitur import ambil_fitur
+
 # Dua peringatan ini cuma berisik di layar, tidak bikin program rusak.
 warnings.filterwarnings("ignore", message="X does not have valid feature names")
 warnings.filterwarnings("ignore", message=".*GetPrototype.*")
 
-PATH_MODEL = "rf_bisindo_99.pkl"
+PATH_MODEL = "rf_bisindo_v2.pkl"
 
 # Warna dipakai OpenCV dengan urutan BGR (biru, hijau, merah), bukan RGB.
 ABU, HIJAU, BIRU, PUTIH, KUNING, GELAP = (
@@ -363,7 +365,9 @@ def utama() -> int:
                 sejak_tangan_hilang = None
                 mode = "baca"
 
-                peluang = model.predict_proba(angka)[0]
+                # Titik mentah diolah dulu jadi 162 angka lewat fitur.py,
+                # persis seperti waktu modelnya dilatih.
+                peluang = model.predict_proba(ambil_fitur(angka))[0]
                 indeks_tertinggi = int(np.argmax(peluang))
                 tebakan = model.classes_[indeks_tertinggi]
                 keyakinan = float(peluang[indeks_tertinggi])

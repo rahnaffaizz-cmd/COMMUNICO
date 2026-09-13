@@ -23,11 +23,13 @@ import joblib
 import mediapipe as mp
 import numpy as np
 
+from fitur import ambil_fitur
+
 # Dua peringatan ini cuma berisik di layar, tidak bikin program rusak.
 warnings.filterwarnings("ignore", message="X does not have valid feature names")
 warnings.filterwarnings("ignore", message=".*GetPrototype.*")
 
-PATH_MODEL = "rf_bisindo_99.pkl"
+PATH_MODEL = "rf_bisindo_v2.pkl"
 FOLDER_CONTOH = "contoh"
 
 
@@ -100,7 +102,8 @@ def utama() -> int:
             print(f"{nama_file:24s} -> tangan tidak terdeteksi")
             continue
 
-        peluang = model.predict_proba(angka)[0]
+        # Diolah dulu lewat fitur.py, sama seperti waktu model dilatih.
+        peluang = model.predict_proba(ambil_fitur(angka))[0]
         indeks = int(np.argmax(peluang))
         tebakan = model.classes_[indeks]
         keyakinan = float(peluang[indeks])
