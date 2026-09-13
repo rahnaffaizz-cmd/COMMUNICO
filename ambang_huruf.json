@@ -1,0 +1,32 @@
+{
+  "target_presisi": 80.0,
+  "ambang": {
+    "A": 0.79,
+    "B": 0.99,
+    "C": 0.51,
+    "D": 0.99,
+    "E": 0.99,
+    "F": 0.2,
+    "G": 0.2,
+    "H": 0.2,
+    "I": 0.99,
+    "J": 0.28,
+    "K": 0.2,
+    "L": 0.28,
+    "M": 0.99,
+    "N": 0.99,
+    "O": 0.2,
+    "P": 0.26,
+    "Q": 0.59,
+    "R": 0.2,
+    "S": 0.2,
+    "T": 0.23,
+    "U": 0.25,
+    "V": 0.2,
+    "W": 0.3,
+    "X": 0.2,
+    "Y": 0.6,
+    "Z": 0.2
+  },
+  "keterangan": "Ambang keyakinan per huruf, dibuat oleh diagnosa.py. Nilai 0.99 berarti huruf itu ditolak."
+}

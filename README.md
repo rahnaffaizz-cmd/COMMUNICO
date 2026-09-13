@@ -27,6 +27,8 @@ jalan, atau nama obat, ketika juru bahasa isyarat tidak tersedia.
 | `uji_gambar.py` | uji model pakai file gambar, tanpa kamera |
 | `fitur.py` | mengubah titik tangan jadi angka yang dipelajari model |
 | `catatan.py` | mencatat jalannya program di tiap tahap |
+| `diagnosa.py` | memeriksa tiap huruf dan mencari ambang keyakinan terbaiknya |
+| `ambang_huruf.json` | ambang keyakinan per huruf, dipakai otomatis |
 | `latih.py` | melatih ulang model dan membandingkannya dengan yang lama |
 | `evaluasi.py` | ukur ketepatan model secara jujur, jadi tolok ukur perbaikan |
 | `rf_bisindo_v2.pkl` | **model yang dipakai sekarang** (10 MB) |
@@ -113,6 +115,67 @@ Ketepatan: 4/4 = 100%
 
 Launcher akan mencari Python secara berurutan: folder `.venv` di dalam repo ini,
 lalu `.venv` di folder induk, terakhir `python` yang ada di PATH.
+
+---
+
+## Ambang keyakinan yang berbeda tiap huruf
+
+Ambang tunggal untuk semua huruf itu kasar, karena perilaku tiap huruf jauh
+berbeda. `diagnosa.py` memeriksanya satu per satu, lalu menulis ambang yang pas
+ke `ambang_huruf.json` yang dipakai program secara otomatis.
+
+Yang dibandingkan adalah **keyakinan model saat menebak benar** dengan
+**keyakinan saat menebak salah**. Kalau keduanya berjauhan, ambang bisa
+memisahkan. Kalau berdekatan, ambang setinggi apa pun percuma.
+
+Hasilnya untuk huruf yang tertolong:
+
+| Huruf | Akurasi apa adanya | Presisi setelah ambang | Huruf tersisa |
+|---|---|---|---|
+| H | 37,1% | **92,2%** | 97,8% |
+| O | 42,2% | **88,8%** | 100% |
+| T | 54,2% | 80,7% | 97,0% |
+| V | 93,9% | **99,8%** | 100% |
+| R | 99,2% | **99,3%** | 100% |
+
+Huruf **H** melonjak dari 37% ke 92% tanpa kehilangan apa pun, karena saat benar
+model yakin 0,54 sedangkan saat salah cuma 0,26.
+
+### Enam huruf yang ditolak: B, D, E, I, M, N
+
+Untuk huruf ini model justru **lebih yakin waktu menebak salah**:
+
+| Huruf | Yakin saat benar | Yakin saat salah |
+|---|---|---|
+| E | 0,28 | **0,86** |
+| N | 0,63 | **0,87** |
+| B | 0,52 | **0,83** |
+| M | 0,68 | **0,79** |
+
+Menaikkan ambang malah menyaring keluar jawaban yang benar dan menyisakan yang
+salah. Karena itu keenam huruf ini **tidak pernah dimasukkan ke teks**. Untuk
+mengeja, huruf yang salah lebih merugikan daripada huruf yang tidak muncul:
+kalau tidak muncul tinggal diulang, kalau salah masuk tanpa disadari, kata yang
+diucapkan jadi keliru.
+
+Konsekuensinya nyata: kata seperti **ITU** tidak bisa dieja, karena I ditolak.
+Kalau Anda tetap ingin mencobanya:
+
+```powershell
+.\run.ps1 --ambang-seragam
+```
+
+Semua huruf jadi ikut masuk, tapi ketepatannya turun drastis.
+
+### Mengukur ulang atau mengubah target
+
+```powershell
+.\.venv\Scripts\python diagnosa.py                      # target presisi 80%
+.\.venv\Scripts\python diagnosa.py --target-presisi 90  # lebih ketat
+.\.venv\Scripts\python diagnosa.py --huruf I J T        # periksa huruf tertentu
+```
+
+Makin tinggi targetnya, makin sedikit huruf yang lolos tapi makin jarang salah.
 
 ---
 

@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import queue
 import tempfile
 import threading
@@ -175,15 +176,23 @@ class VotingHuruf:
     """
 
     def __init__(self, jumlah_frame: int, frame_konfirmasi: int,
-                 min_keyakinan: float, jeda: float, catat=None):
+                 min_keyakinan: float, jeda: float, catat=None,
+                 ambang_huruf: dict | None = None):
         self.jumlah_frame = jumlah_frame
         self.frame_konfirmasi = frame_konfirmasi
         self.min_keyakinan = min_keyakinan
         self.jeda = jeda
         self.catat = catat
+        # Ambang khusus tiap huruf, hasil diagnosa.py. Kalau kosong, semua huruf
+        # memakai min_keyakinan yang sama.
+        self.ambang_huruf = ambang_huruf or {}
         self._riwayat: deque[tuple[str, float]] = deque(maxlen=jumlah_frame)
         self._waktu_terima_terakhir = float("-inf")
         self._lapor_terakhir = ""
+
+    def ambang_untuk(self, huruf: str) -> float:
+        """Ambang keyakinan yang berlaku untuk satu huruf."""
+        return self.ambang_huruf.get(huruf, self.min_keyakinan)
 
     def kosongkan(self) -> None:
         self._riwayat.clear()
@@ -210,10 +219,19 @@ class VotingHuruf:
                                                   self.frame_konfirmasi, rata))
             return None
 
-        if rata < self.min_keyakinan:
+        batas = self.ambang_untuk(juara)
+        if rata < batas:
             # Sering muncul, tapi modelnya sendiri ragu-ragu.
-            self._lapor(f"ragu-{juara}", lambda: self.catat.voting_gagal(
-                juara, f"keyakinan {rata:.2f} di bawah batas {self.min_keyakinan:.2f}"))
+            if batas >= 0.99:
+                # Huruf ini memang sengaja ditolak. Diagnosa menunjukkan model
+                # justru lebih yakin saat menebaknya salah, jadi ambang berapa
+                # pun tidak menolong dan lebih baik tidak dimasukkan sama sekali.
+                self._lapor(f"tolak-{juara}", lambda: self.catat.voting_gagal(
+                    juara, "huruf ini ditolak, model tidak bisa diandalkan untuknya"))
+            else:
+                self._lapor(f"ragu-{juara}", lambda: self.catat.voting_gagal(
+                    juara, f"keyakinan {rata:.2f} di bawah ambang {juara} "
+                           f"yang {batas:.2f}"))
             return None
 
         sisa = self.jeda - (sekarang - self._waktu_terima_terakhir)
@@ -261,6 +279,35 @@ def vektor_titik_tangan(hasil) -> tuple[np.ndarray | None, int]:
     return np.asarray(angka, dtype=np.float32).reshape(1, -1), jumlah_tangan
 
 
+# ------------------------------------------------------------------ ambang huruf
+def muat_ambang_huruf(catat=None) -> dict:
+    """Baca ambang keyakinan tiap huruf dari ambang_huruf.json, kalau ada.
+
+    Berkas itu dibuat oleh diagnosa.py. Isinya ambang yang berbeda-beda karena
+    tiap huruf perilakunya tidak sama: G hampir selalu benar sehingga ambang
+    rendah pun aman, sedangkan E justru lebih sering yakin waktu salah sehingga
+    lebih baik ditolak sama sekali.
+    """
+    berkas = Path(__file__).resolve().parent / "ambang_huruf.json"
+    if not berkas.exists():
+        if catat:
+            catat.kabar("AMBANG", "ambang_huruf.json tidak ada, semua huruf "
+                                  "memakai ambang yang sama")
+        return {}
+
+    isi = json.loads(berkas.read_text(encoding="utf-8"))
+    ambang = isi.get("ambang", {})
+    ditolak = sorted(h for h, nilai in ambang.items() if nilai >= 0.99)
+
+    if catat:
+        catat.kabar("AMBANG", f"memakai ambang per huruf dari {berkas.name} "
+                              f"(target presisi {isi.get('target_presisi', '?')}%)")
+        if ditolak:
+            catat.kabar("AMBANG", f"huruf yang ditolak: {' '.join(ditolak)} "
+                                  f"-- pakai --ambang-seragam kalau tetap ingin dicoba")
+    return ambang
+
+
 # ----------------------------------------------------------------------- argumen
 def baca_argumen() -> argparse.Namespace:
     p = argparse.ArgumentParser(
@@ -292,6 +339,9 @@ def baca_argumen() -> argparse.Namespace:
                    help="ambang MediaPipe untuk mulai mendeteksi tangan")
     p.add_argument("--keyakinan-tracking", type=float, default=0.5,
                    help="ambang MediaPipe untuk terus mengikuti tangan")
+    p.add_argument("--ambang-seragam", action="store_true",
+                   help="abaikan ambang_huruf.json, pakai --min-keyakinan untuk "
+                        "semua huruf. Huruf yang biasanya ditolak jadi ikut masuk")
     p.add_argument("--tanpa-catatan", action="store_true",
                    help="matikan pencatatan jalannya program")
     p.add_argument("--catat-detail", action="store_true",
@@ -374,9 +424,12 @@ def utama() -> int:
     catat.mulai(PATH_MODEL, model.n_features_in_, "".join(model.classes_),
                 arg.bahasa, arg.kamera)
 
+    ambang_huruf = {} if arg.ambang_seragam else muat_ambang_huruf(catat)
+
     pengucap = Pengucap(bahasa=arg.bahasa, pelan=arg.pelan, catat=catat)
     voting = VotingHuruf(arg.jendela_voting, arg.frame_konfirmasi,
-                         arg.min_keyakinan, arg.jeda, catat=catat)
+                         arg.min_keyakinan, arg.jeda, catat=catat,
+                         ambang_huruf=ambang_huruf)
 
     # CAP_DSHOW dipakai supaya kamera di Windows kebuka lebih cepat.
     kamera = cv2.VideoCapture(arg.kamera, cv2.CAP_DSHOW)
