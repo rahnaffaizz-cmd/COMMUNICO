@@ -382,8 +382,11 @@ def gambar_tampilan(frame, *, mode, tebakan, keyakinan, huruf_voting, kemajuan_v
                     HURUF_FONT, 0.5, PUTIH, 1)
 
     # Batang kecil yang menunjukkan huruf ini sudah menang berapa kali.
+    # Dibatasi 10 karena jendela voting lebih panjang dari syarat konfirmasi,
+    # jadi kemajuannya bisa lewat dari 100 persen dan batangnya meluber.
     if huruf_voting:
-        batang = "#" * int(round(kemajuan_voting * 10))
+        isi = min(10, int(round(kemajuan_voting * 10)))
+        batang = "#" * isi
         cv2.putText(frame, f"voting {huruf_voting} [{batang:<10}]", (20, 65),
                     HURUF_FONT, 0.6, KUNING, 1)
 
