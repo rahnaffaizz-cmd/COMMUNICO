@@ -42,6 +42,7 @@ import joblib
 import mediapipe as mp
 import numpy as np
 
+from catatan import Pencatat
 from fitur import ambil_fitur
 
 # Dua peringatan ini cuma berisik di layar, tidak bikin program rusak.
@@ -74,9 +75,10 @@ class Pengucap:
     sama tidak perlu diunduh ulang.
     """
 
-    def __init__(self, bahasa: str = "id", pelan: bool = False):
+    def __init__(self, bahasa: str = "id", pelan: bool = False, catat=None):
         self.bahasa = bahasa
         self.pelan = pelan
+        self.catat = catat
         self._folder_simpan = Path(tempfile.gettempdir()) / "gesture_voice_tts"
         self._folder_simpan.mkdir(exist_ok=True)
         self._antrian: queue.Queue[str | None] = queue.Queue()
@@ -96,10 +98,15 @@ class Pengucap:
         """Minta Google TTS bikin file mp3. Balik False kalau gagal (misal tidak ada internet)."""
         from gtts import gTTS
 
+        mulai = time.monotonic()
         try:
             gTTS(text=teks, lang=self.bahasa, slow=self.pelan).save(str(path))
+            if self.catat:
+                self.catat.suara_unduh(teks, time.monotonic() - mulai)
             return True
         except Exception as e:  # noqa: BLE001 - biasanya masalah internet
+            if self.catat:
+                self.catat.suara_gagal(teks, str(e))
             if not self._sudah_pernah_lapor:
                 print(f"Google TTS tidak bisa dihubungi ({e}). Suara dimatikan "
                       f"sampai internet kembali. Kata yang sudah tersimpan tetap bisa dibunyikan.")
@@ -123,11 +130,19 @@ class Pengucap:
             if teks is None:  # tanda dari tutup(): waktunya berhenti
                 break
             self._sedang_bicara.set()
+            mulai = time.monotonic()
             try:
                 klip = self._path_klip(teks)
-                if klip.exists() or self._buat_suara(teks, klip):
+                tersimpan = klip.exists()
+                if tersimpan and self.catat:
+                    self.catat.suara_simpanan(teks)
+                if tersimpan or self._buat_suara(teks, klip):
                     self._putar(klip)
+                    if self.catat:
+                        self.catat.suara_selesai(teks, time.monotonic() - mulai)
             except Exception as e:  # noqa: BLE001
+                if self.catat:
+                    self.catat.suara_gagal(teks, str(e))
                 print(f"Gagal memutar suara: {e}")
             finally:
                 self._sedang_bicara.clear()
@@ -136,6 +151,8 @@ class Pengucap:
         """Titip teks untuk diucapkan. Kalau masih bicara, permintaan diabaikan."""
         teks = teks.strip()
         if teks and not self._sedang_bicara.is_set():
+            if self.catat:
+                self.catat.suara_minta(teks)
             self._antrian.put(teks)
 
     @property
@@ -158,16 +175,24 @@ class VotingHuruf:
     """
 
     def __init__(self, jumlah_frame: int, frame_konfirmasi: int,
-                 min_keyakinan: float, jeda: float):
+                 min_keyakinan: float, jeda: float, catat=None):
         self.jumlah_frame = jumlah_frame
         self.frame_konfirmasi = frame_konfirmasi
         self.min_keyakinan = min_keyakinan
         self.jeda = jeda
+        self.catat = catat
         self._riwayat: deque[tuple[str, float]] = deque(maxlen=jumlah_frame)
         self._waktu_terima_terakhir = float("-inf")
+        self._lapor_terakhir = ""
 
     def kosongkan(self) -> None:
         self._riwayat.clear()
+
+    def _lapor(self, pesan_kunci: str, tulis) -> None:
+        """Catat sekali saja selama alasannya belum berubah, biar tidak banjir."""
+        if self.catat and pesan_kunci != self._lapor_terakhir:
+            self._lapor_terakhir = pesan_kunci
+            tulis()
 
     def masukkan(self, huruf: str, keyakinan: float, sekarang: float) -> str | None:
         """Masukkan satu tebakan. Balik nama huruf kalau diterima, None kalau belum."""
@@ -175,18 +200,34 @@ class VotingHuruf:
 
         jumlah = Counter(h for h, _ in self._riwayat)
         juara, banyak = jumlah.most_common(1)[0]
-        if banyak < self.frame_konfirmasi:
-            return None  # belum cukup sering muncul
-
         nilai = [k for h, k in self._riwayat if h == juara]
-        if sum(nilai) / len(nilai) < self.min_keyakinan:
-            return None  # sering muncul tapi modelnya ragu-ragu
+        rata = sum(nilai) / len(nilai)
 
-        if sekarang - self._waktu_terima_terakhir < self.jeda:
-            return None  # masih terlalu cepat dari huruf sebelumnya
+        if banyak < self.frame_konfirmasi:
+            # Belum cukup sering muncul.
+            self._lapor(f"kurang-{juara}-{banyak}",
+                        lambda: self.catat.voting(juara, banyak,
+                                                  self.frame_konfirmasi, rata))
+            return None
 
+        if rata < self.min_keyakinan:
+            # Sering muncul, tapi modelnya sendiri ragu-ragu.
+            self._lapor(f"ragu-{juara}", lambda: self.catat.voting_gagal(
+                juara, f"keyakinan {rata:.2f} di bawah batas {self.min_keyakinan:.2f}"))
+            return None
+
+        sisa = self.jeda - (sekarang - self._waktu_terima_terakhir)
+        if sisa > 0:
+            # Masih terlalu cepat dari huruf sebelumnya.
+            self._lapor(f"jeda-{juara}", lambda: self.catat.voting_gagal(
+                juara, f"masih menunggu jeda {sisa:.1f} detik lagi"))
+            return None
+
+        if self.catat:
+            self.catat.voting(juara, banyak, self.frame_konfirmasi, rata)
         self._waktu_terima_terakhir = sekarang
         self._riwayat.clear()
+        self._lapor_terakhir = ""
         return juara
 
     @property
@@ -251,13 +292,19 @@ def baca_argumen() -> argparse.Namespace:
                    help="ambang MediaPipe untuk mulai mendeteksi tangan")
     p.add_argument("--keyakinan-tracking", type=float, default=0.5,
                    help="ambang MediaPipe untuk terus mengikuti tangan")
+    p.add_argument("--tanpa-catatan", action="store_true",
+                   help="matikan pencatatan jalannya program")
+    p.add_argument("--catat-detail", action="store_true",
+                   help="catat juga tiap tebakan dan kemajuan voting, bukan cuma "
+                        "kejadian penting. Berguna untuk mencari tahu kenapa "
+                        "sebuah huruf tidak pernah diterima")
     return p.parse_args()
 
 
 # ---------------------------------------------------------------------- tampilan
 def gambar_tampilan(frame, *, mode, tebakan, keyakinan, huruf_voting, kemajuan_voting,
                     teks, sedang_bicara, hitung_mundur, ucap_setelah, auto_ucap,
-                    titik_tangan, mp_gambar, mp_tangan):
+                    titik_tangan, mp_gambar, mp_tangan, tiga_besar=()):
     """Tulis semua info ke atas gambar kamera."""
     tinggi, lebar = frame.shape[:2]
 
@@ -284,6 +331,13 @@ def gambar_tampilan(frame, *, mode, tebakan, keyakinan, huruf_voting, kemajuan_v
         batang = "#" * int(round(kemajuan_voting * 10))
         cv2.putText(frame, f"voting {huruf_voting} [{batang:<10}]", (20, 65),
                     HURUF_FONT, 0.6, KUNING, 1)
+
+    # Tiga tebakan teratas di pojok kanan. Kalau huruf yang Anda maksud muncul
+    # di urutan kedua atau ketiga, berarti model mengenalinya tapi kalah saing.
+    for baris, (h, nilai) in enumerate(tiga_besar):
+        warna = PUTIH if baris == 0 else ABU
+        cv2.putText(frame, f"{h} {nilai:.2f}", (lebar - 110, 35 + baris * 24),
+                    HURUF_FONT, 0.6, warna, 2 if baris == 0 else 1)
 
     # Kotak gelap di bawah untuk teks yang sudah terkumpul.
     cv2.rectangle(frame, (0, tinggi - 96), (lebar, tinggi), GELAP, -1)
@@ -314,13 +368,15 @@ def gambar_tampilan(frame, *, mode, tebakan, keyakinan, huruf_voting, kemajuan_v
 def utama() -> int:
     arg = baca_argumen()
 
-    model = joblib.load(PATH_MODEL)
-    print(f"Model siap: {type(model).__name__}  huruf: {''.join(model.classes_)}")
-    print(f"Bahasa suara: {arg.bahasa}{'  (pelan)' if arg.pelan else ''}")
+    catat = Pencatat(aktif=not arg.tanpa_catatan, detail=arg.catat_detail)
 
-    pengucap = Pengucap(bahasa=arg.bahasa, pelan=arg.pelan)
+    model = joblib.load(PATH_MODEL)
+    catat.mulai(PATH_MODEL, model.n_features_in_, "".join(model.classes_),
+                arg.bahasa, arg.kamera)
+
+    pengucap = Pengucap(bahasa=arg.bahasa, pelan=arg.pelan, catat=catat)
     voting = VotingHuruf(arg.jendela_voting, arg.frame_konfirmasi,
-                         arg.min_keyakinan, arg.jeda)
+                         arg.min_keyakinan, arg.jeda, catat=catat)
 
     # CAP_DSHOW dipakai supaya kamera di Windows kebuka lebih cepat.
     kamera = cv2.VideoCapture(arg.kamera, cv2.CAP_DSHOW)
@@ -343,25 +399,32 @@ def utama() -> int:
     waktu_huruf_terakhir = float("-inf")
     sejak_tangan_hilang: float | None = None
     auto_ucap = not arg.tanpa_auto_ucap
+    jumlah_frame = 0
+    waktu_mulai = time.monotonic()
 
     try:
         while True:
             berhasil, frame = kamera.read()
             if not berhasil:
+                catat.kabar("GAGAL", "kamera berhenti mengirim gambar")
                 print("GAGAL: kamera berhenti mengirim gambar.")
                 return 1
+            jumlah_frame += 1
 
             # Dibalik supaya terasa seperti bercermin, lebih enak dipakai.
             frame = cv2.flip(frame, 1)
             sekarang = time.monotonic()
 
             hasil = pendeteksi.process(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-            angka, _ = vektor_titik_tangan(hasil)
+            angka, jumlah_tangan = vektor_titik_tangan(hasil)
 
             mode = "diam"
             tebakan, keyakinan = "", 0.0
+            tiga_besar = []
 
             if angka is not None:
+                if sejak_tangan_hilang is not None:
+                    catat.tangan(jumlah_tangan)
                 sejak_tangan_hilang = None
                 mode = "baca"
 
@@ -372,10 +435,17 @@ def utama() -> int:
                 tebakan = model.classes_[indeks_tertinggi]
                 keyakinan = float(peluang[indeks_tertinggi])
 
+                # Tiga tebakan teratas. Ini yang memperlihatkan huruf apa yang
+                # sedang bersaing, misalnya I yang selalu kalah oleh J.
+                urut = np.argsort(peluang)[::-1][:3]
+                tiga_besar = [(model.classes_[i], float(peluang[i])) for i in urut]
+                catat.tebakan(tebakan, keyakinan, tiga_besar[1:])
+
                 huruf_diterima = voting.masukkan(tebakan, keyakinan, sekarang)
                 if huruf_diterima:
                     teks += huruf_diterima
                     waktu_huruf_terakhir = sekarang
+                    catat.huruf_diterima(huruf_diterima, teks)
                     if not arg.tanpa_eja_huruf:
                         pengucap.ucapkan(huruf_diterima)
             else:
@@ -384,9 +454,11 @@ def utama() -> int:
                 voting.kosongkan()
                 if sejak_tangan_hilang is None:
                     sejak_tangan_hilang = sekarang
+                    catat.rinci("TANGAN", "tangan hilang dari layar")
                 elif (sekarang - sejak_tangan_hilang >= arg.spasi_setelah
                       and teks and not teks.endswith(" ")):
                     teks += " "
+                    catat.teks_berubah("spasi ditambah otomatis", teks)
 
             hitung_mundur = max(0.0, arg.ucap_setelah - (sekarang - waktu_huruf_terakhir))
             sudah_waktunya = (
@@ -409,6 +481,7 @@ def utama() -> int:
                 ucap_setelah=arg.ucap_setelah, auto_ucap=auto_ucap,
                 titik_tangan=hasil.multi_hand_landmarks or [],
                 mp_gambar=mp_gambar, mp_tangan=mp_tangan,
+                tiga_besar=tiga_besar,
             )
 
             cv2.imshow("BISINDO ke Suara   (tekan Q untuk keluar)", frame)
@@ -418,25 +491,29 @@ def utama() -> int:
                 break
             elif tombol in (8, 127):                # Backspace
                 teks = teks[:-1]
+                catat.teks_berubah("huruf terakhir dihapus", teks)
             elif tombol == ord("c"):                # C
                 teks = ""
+                catat.teks_berubah("teks dikosongkan", teks)
             elif tombol == ord(" "):                # Spasi
                 if teks and not teks.endswith(" "):
                     teks += " "
+                    catat.teks_berubah("spasi ditambah manual", teks)
             elif tombol in (13, 10):                # Enter
                 pengucap.ucapkan(teks)
                 teks = ""
                 waktu_huruf_terakhir = float("-inf")
             elif tombol == ord("p"):                # P
                 auto_ucap = not auto_ucap
+                catat.kabar("ATUR", f"ucap otomatis {'menyala' if auto_ucap else 'mati'}")
     finally:
         # Bagian ini selalu dijalankan, walaupun program berhenti karena error.
+        catat.selesai(teks, jumlah_frame, time.monotonic() - waktu_mulai)
         pengucap.tutup()
         pendeteksi.close()
         kamera.release()
         cv2.destroyAllWindows()
 
-    print(f"Teks terakhir: {teks!r}")
     return 0
 
 

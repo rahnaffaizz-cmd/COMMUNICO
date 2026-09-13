@@ -26,6 +26,7 @@ jalan, atau nama obat, ketika juru bahasa isyarat tidak tersedia.
 | `gesture_voice.py` | program utama, pakai kamera |
 | `uji_gambar.py` | uji model pakai file gambar, tanpa kamera |
 | `fitur.py` | mengubah titik tangan jadi angka yang dipelajari model |
+| `catatan.py` | mencatat jalannya program di tiap tahap |
 | `latih.py` | melatih ulang model dan membandingkannya dengan yang lama |
 | `evaluasi.py` | ukur ketepatan model secara jujur, jadi tolok ukur perbaikan |
 | `rf_bisindo_v2.pkl` | **model yang dipakai sekarang** (10 MB) |
@@ -112,6 +113,42 @@ Ketepatan: 4/4 = 100%
 
 Launcher akan mencari Python secara berurutan: folder `.venv` di dalam repo ini,
 lalu `.venv` di folder induk, terakhir `python` yang ada di PATH.
+
+---
+
+## Melihat apa yang terjadi di dalam program
+
+Setiap kali dijalankan, program mencatat jalannya proses ke layar sekaligus ke
+berkas di folder `log/`. Tanpa ini, kalau hurufnya salah kita cuma tahu
+"hasilnya keliru" tanpa tahu di mana macetnya.
+
+Tampilan biasa hanya menampilkan kejadian penting:
+
+```
+10:30:21 [MULAI   ] model rf_bisindo_v2.pkl, butuh 162 angka masukan
+10:30:21 [HURUF   ] 'I' diterima  ->  teks sekarang: "I"
+10:30:21 [HURUF   ] 'T' diterima  ->  teks sekarang: "IT"
+10:30:21 [HURUF   ] 'U' diterima  ->  teks sekarang: "ITU"
+10:30:21 [SUARA   ] minta dibunyikan: "ITU"
+10:30:23 [SUARA   ] selesai membunyikan "ITU" (1.52 detik)
+10:30:23 [SELESAI ] 42 frame dalam 6.4 detik (6.5 frame per detik)
+```
+
+Kalau sebuah huruf tidak pernah mau diterima, jalankan dengan `--catat-detail`.
+Di situ kelihatan tebakan model beserta pesaingnya, dan kemajuan voting:
+
+```
+10:29:50 [TEBAK   ] I (0.75)   pesaing: J 0.15
+10:29:50 [VOTING  ] I: menang 5/8 frame, rata-rata keyakinan 0.75
+10:29:50 [VOTING  ] I belum diterima, keyakinan 0.31 di bawah batas 0.45
+```
+
+Di layar kamera juga muncul **tiga tebakan teratas** di pojok kanan atas. Kalau
+huruf yang Anda maksud muncul di urutan kedua atau ketiga, berarti model
+sebenarnya mengenalinya tapi kalah bersaing — biasanya bisa ditolong dengan
+menurunkan `--min-keyakinan` atau memperbaiki posisi tangan.
+
+Pakai `--tanpa-catatan` kalau ingin layar bersih.
 
 ---
 

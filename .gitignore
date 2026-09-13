@@ -32,3 +32,6 @@ data/
 # Suara gTTS sebenarnya disimpan di folder TEMP sistem, tapi kalau ada yang
 # menyalinnya ke sini, jangan ikut masuk repo.
 *.mp3
+
+# Catatan jalannya program, dibuat baru setiap kali dijalankan.
+log/
