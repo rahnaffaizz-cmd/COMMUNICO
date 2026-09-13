@@ -44,7 +44,7 @@ import mediapipe as mp
 import numpy as np
 
 from catatan import Pencatat
-from fitur import ambil_fitur
+from fitur import ambil_fitur, sesuaikan_untuk
 from pengukur import PengukurHuruf, StatistikSesi
 
 # Dua peringatan ini cuma berisik di layar, tidak bikin program rusak.
@@ -510,7 +510,8 @@ def utama() -> int:
 
                 # Titik mentah diolah dulu jadi 162 angka lewat fitur.py,
                 # persis seperti waktu modelnya dilatih.
-                peluang = model.predict_proba(ambil_fitur(angka))[0]
+                fitur = sesuaikan_untuk(ambil_fitur(angka), model.n_features_in_)
+                peluang = model.predict_proba(fitur)[0]
                 indeks_tertinggi = int(np.argmax(peluang))
                 tebakan = model.classes_[indeks_tertinggi]
                 keyakinan = float(peluang[indeks_tertinggi])
@@ -530,7 +531,8 @@ def utama() -> int:
                                          jumlah_tangan)
 
                 berjalan = sekarang - waktu_mulai
-                statistik.catat(tebakan, keyakinan, jumlah_tangan, berjalan)
+                statistik.catat(tebakan, keyakinan, jumlah_tangan, berjalan,
+                                titik_mentah=angka)
                 if statistik.saatnya_lapor(berjalan):
                     catat.kabar("PANTAU", statistik.ringkas_berjalan())
 

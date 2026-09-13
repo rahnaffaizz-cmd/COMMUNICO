@@ -23,7 +23,7 @@ import joblib
 import mediapipe as mp
 import numpy as np
 
-from fitur import ambil_fitur
+from fitur import ambil_fitur, sesuaikan_untuk
 
 # Dua peringatan ini cuma berisik di layar, tidak bikin program rusak.
 warnings.filterwarnings("ignore", message="X does not have valid feature names")
@@ -103,7 +103,8 @@ def utama() -> int:
             continue
 
         # Diolah dulu lewat fitur.py, sama seperti waktu model dilatih.
-        peluang = model.predict_proba(ambil_fitur(angka))[0]
+        fitur = sesuaikan_untuk(ambil_fitur(angka), model.n_features_in_)
+        peluang = model.predict_proba(fitur)[0]
         indeks = int(np.argmax(peluang))
         tebakan = model.classes_[indeks]
         keyakinan = float(peluang[indeks])

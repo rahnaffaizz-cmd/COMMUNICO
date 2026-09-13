@@ -40,7 +40,7 @@ import numpy as np
 
 JUMLAH_TITIK = 21
 PANJANG_MASUKAN = 126
-PANJANG_KELUARAN = 162
+PANJANG_KELUARAN = 166
 
 # Pasangan (pangkal, ujung) tiap jari: jempol, telunjuk, tengah, manis, kelingking
 JARI = [(2, 4), (5, 8), (9, 12), (13, 16), (17, 20)]
@@ -116,6 +116,42 @@ def _ukuran_geometris(titik: np.ndarray) -> list[np.ndarray]:
     return kumpulan
 
 
+def _posisi_relatif(mentah_titik: np.ndarray) -> np.ndarray:
+    """Letak tangan kedua terhadap tangan pertama: 4 angka.
+
+    Ini WAJIB dihitung dari koordinat MENTAH, sebelum tiap tangan digeser ke
+    pergelangannya masing-masing. Setelah digeser, kedua tangan sama-sama
+    berpusat di titik nol dan letak relatifnya hilang sama sekali.
+
+    Padahal untuk huruf dua tangan, letak relatif itulah yang membedakan.
+    Contohnya A dan S: keduanya dua tangan dengan bentuk jari mirip, bedanya
+    A kedua tangannya sejajar kiri-kanan, sedangkan S tersusun atas-bawah.
+    Tanpa angka ini, model mustahil membedakan keduanya.
+
+    Isinya: selisih letak pergelangan (x, y, z) dan jaraknya, semuanya
+    diskalakan dengan ukuran tangan pertama supaya tidak bergantung pada
+    seberapa dekat orangnya ke kamera.
+    """
+    banyak = len(mentah_titik)
+    hasil = np.zeros((banyak, 4), dtype=np.float32)
+
+    tangan1 = mentah_titik[:, 0]
+    tangan2 = mentah_titik[:, 1]
+    dua_tangan = (np.abs(tangan1).sum(axis=(1, 2)) > 1e-9) & \
+                 (np.abs(tangan2).sum(axis=(1, 2)) > 1e-9)
+    if not dua_tangan.any():
+        return hasil
+
+    # Ukuran tangan pertama dipakai sebagai satuan, sama seperti saat normalisasi.
+    ukuran = np.linalg.norm(tangan1[:, 9] - tangan1[:, 0], axis=1)
+    ukuran[ukuran < 1e-6] = 1.0
+
+    selisih = (tangan2[:, 0] - tangan1[:, 0]) / ukuran[:, None]
+    hasil[dua_tangan, :3] = selisih[dua_tangan]
+    hasil[dua_tangan, 3] = np.linalg.norm(selisih[dua_tangan], axis=1)
+    return hasil
+
+
 def ambil_fitur(mentah: np.ndarray) -> np.ndarray:
     """Ubah titik mentah jadi 162 angka siap pakai.
 
@@ -134,9 +170,37 @@ def ambil_fitur(mentah: np.ndarray) -> np.ndarray:
     # Nilai kosong dianggap tangan tidak terlihat.
     mentah = np.nan_to_num(mentah, nan=0.0)
 
-    titik = _normalkan(mentah.reshape(-1, 2, JUMLAH_TITIK, 3))
-    bagian = [titik.reshape(len(mentah), -1)] + _ukuran_geometris(titik)
+    mentah_titik = mentah.reshape(-1, 2, JUMLAH_TITIK, 3)
+
+    # Letak relatif dihitung LEBIH DULU, selagi koordinatnya masih mentah.
+    # Setelah dinormalkan, keterangan itu sudah hilang dan tidak bisa dipulihkan.
+    relatif = _posisi_relatif(mentah_titik)
+
+    titik = _normalkan(mentah_titik)
+    bagian = [titik.reshape(len(mentah), -1)] + _ukuran_geometris(titik) + [relatif]
 
     hasil = np.concatenate(bagian, axis=1).astype(np.float32)
     assert hasil.shape[1] == PANJANG_KELUARAN, hasil.shape
     return hasil
+
+
+def sesuaikan_untuk(fitur_lengkap: np.ndarray, jumlah_diminta: int) -> np.ndarray:
+    """Potong fitur agar cocok dengan yang diminta model.
+
+    Ada dua versi model yang beredar:
+      162 angka  tanpa letak relatif antar tangan (versi lama)
+      166 angka  dengan letak relatif (versi baru)
+
+    Karena 4 angka letak relatif ditaruh paling belakang, versi lama cukup
+    diperoleh dengan membuang empat angka terakhir. Dengan begitu satu berkas
+    fitur.py bisa melayani kedua model, sehingga keduanya bisa dibandingkan
+    langsung tanpa perlu bertukar berkas.
+    """
+    tersedia = fitur_lengkap.shape[1]
+    if jumlah_diminta == tersedia:
+        return fitur_lengkap
+    if jumlah_diminta < tersedia:
+        return fitur_lengkap[:, :jumlah_diminta]
+    raise ValueError(
+        f"model meminta {jumlah_diminta} angka, fitur.py cuma menyediakan {tersedia}"
+    )

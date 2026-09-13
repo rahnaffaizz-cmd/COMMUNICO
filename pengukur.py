@@ -212,13 +212,22 @@ class StatistikSesi:
         self._lapor_berikutnya = jeda_lapor
 
     def catat(self, huruf: str, keyakinan: float, jumlah_tangan: int,
-              detik: float) -> None:
-        self._baris.append({
+              detik: float, titik_mentah=None) -> None:
+        baris = {
             "detik": round(detik, 2),
             "tangan": jumlah_tangan,
             "tebakan": huruf,
             "keyakinan": round(keyakinan, 4),
-        })
+        }
+
+        # Koordinat mentah ikut disimpan supaya sesi ini bisa DIPUTAR ULANG
+        # dengan model lain di kemudian hari. Tanpa ini, membandingkan dua model
+        # berarti harus merekam ulang dengan peragaan yang mustahil sama persis,
+        # sehingga perbandingannya tidak pernah adil.
+        if titik_mentah is not None:
+            for nomor, nilai in enumerate(np.asarray(titik_mentah).ravel()):
+                baris[f"k{nomor}"] = round(float(nilai), 5)
+        self._baris.append(baris)
 
     def catat_diterima(self, huruf: str) -> None:
         self._diterima[huruf] = self._diterima.get(huruf, 0) + 1
