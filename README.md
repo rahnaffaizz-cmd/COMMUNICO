@@ -29,6 +29,7 @@ jalan, atau nama obat, ketika juru bahasa isyarat tidak tersedia.
 | `catatan.py` | mencatat jalannya program di tiap tahap |
 | `diagnosa.py` | memeriksa tiap huruf dan mencari ambang keyakinan terbaiknya |
 | `ambang_huruf.json` | ambang keyakinan per huruf, dipakai otomatis |
+| `AKURASI.md` | catatan ketepatan tiap huruf beserta cara mengukurnya |
 | `latih.py` | melatih ulang model dan membandingkannya dengan yang lama |
 | `evaluasi.py` | ukur ketepatan model secara jujur, jadi tolok ukur perbaikan |
 | `rf_bisindo_v2.pkl` | **model yang dipakai sekarang** (10 MB) |
@@ -330,6 +331,10 @@ sekali. Huruf **Z** yang tadinya tidak pernah benar sekarang 94%. Huruf **G**
 
 Yang masih bermasalah: **I** dan **E** hampir tidak pernah benar, dan **M**,
 **C**, **N**, **D**, **A**, **H**, **B** masih di bawah 40%.
+
+> **Angka lengkap tiap huruf ada di [AKURASI.md](AKURASI.md)** — ketepatan per
+> huruf, huruf apa yang tertukar dengan apa, sebaran keyakinan saat benar dan
+> saat salah, serta ambang yang dipakai masing-masing.
 
 Angka 62% itu pun masih terlalu optimis untuk pemakaian nyata, karena semua foto
 berasal dari orang, ruangan, dan pencahayaan yang sama. Untuk memperbaikinya
