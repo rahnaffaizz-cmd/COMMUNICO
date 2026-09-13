@@ -606,27 +606,46 @@ def utama() -> int:
                 auto_ucap = not auto_ucap
                 catat.kabar("ATUR", f"ucap otomatis {'menyala' if auto_ucap else 'mati'}")
     finally:
-        # Bagian ini selalu dijalankan, walaupun program berhenti karena error.
+        # Bagian ini selalu dijalankan, walaupun program berhenti karena error
+        # atau jendelanya ditutup lewat tombol X, bukan tombol Q.
         catat.selesai(teks, jumlah_frame, time.monotonic() - waktu_mulai)
         pengucap.tutup()
         pendeteksi.close()
         kamera.release()
         cv2.destroyAllWindows()
 
-    # Ringkasan sesi selalu ditampilkan: huruf apa saja yang terbaca, seberapa
-    # yakin, dan berapa yang berhasil lolos ambang.
-    print(statistik.laporan())
-    rincian_sesi = statistik.simpan_rincian()
-    if rincian_sesi:
-        print(f"Rincian tiap frame tersimpan di log/{rincian_sesi.name}")
-
-    if pengukur is not None:
-        print(pengukur.laporan())
-        rincian = pengukur.simpan_rincian_ukur()
-        if rincian:
-            print(f"\nRincian pengukuran tersimpan di log/{rincian.name}")
+        # Ringkasan HARUS ikut di dalam finally. Kalau ditaruh di luar, error
+        # apa pun akan melewatinya dan data satu sesi hilang percuma, padahal
+        # justru sesi yang bermasalah itulah yang paling perlu diperiksa.
+        tampilkan_ringkasan(statistik, pengukur, catat)
 
     return 0
+
+
+def tampilkan_ringkasan(statistik, pengukur, catat) -> None:
+    """Cetak dan simpan ringkasan sesi. Dibuat tahan error supaya satu bagian
+    yang gagal tidak ikut menggagalkan bagian lainnya."""
+    try:
+        print(statistik.laporan())
+        berkas = statistik.simpan_rincian()
+        if berkas:
+            pesan = f"Rincian tiap frame tersimpan di log/{berkas.name}"
+            print(pesan)
+            catat.kabar("SIMPAN", pesan)
+    except Exception as e:  # noqa: BLE001
+        print(f"Gagal membuat ringkasan sesi: {e}")
+
+    if pengukur is None:
+        return
+    try:
+        print(pengukur.laporan())
+        berkas = pengukur.simpan_rincian_ukur()
+        if berkas:
+            pesan = f"Rincian pengukuran tersimpan di log/{berkas.name}"
+            print(f"\n{pesan}")
+            catat.kabar("SIMPAN", pesan)
+    except Exception as e:  # noqa: BLE001
+        print(f"Gagal membuat laporan pengukuran: {e}")
 
 
 if __name__ == "__main__":
