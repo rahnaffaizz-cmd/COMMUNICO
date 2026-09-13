@@ -214,6 +214,31 @@ menurunkan `--min-keyakinan` atau memperbaiki posisi tangan.
 
 Pakai `--tanpa-catatan` kalau ingin layar bersih.
 
+### Ringkasan sepanjang sesi
+
+Selagi kamera menyala, tiap 20 detik dicatat ringkasan berjalan:
+
+```
+12:04:11 [PANTAU  ] 167 frame | tersering: A 90x/0.37, I 77x/0.42
+```
+
+Saat keluar, muncul tabel lengkap yang menjawab pertanyaan paling sering muncul,
+yaitu kenapa sebuah huruf tidak pernah masuk ke teks:
+
+```
+  huruf | frame | keyakinan          | ambang | masuk | keterangan
+  ------+-------+--------------------+--------+-------+------------------
+    A   |    90 | 0.37  0.36  0.53   |  0.79  |     0 | keyakinan kurang, maks 0.53
+    I   |    80 | 0.42  0.42  0.54   |  0.30  |     1 | lolos
+    E   |    60 | 0.32  0.31  0.48   |  0.99  |     0 | DITOLAK di ambang_huruf.json
+    G   |    50 | 0.71  0.71  0.81   |  0.20  |     2 | lolos
+```
+
+Rincian tiap frame juga ditulis ke `log/sesi_*.csv` supaya bisa dibuka di Excel.
+
+> Angka di tabel ini **bukan ketepatan**, karena program tidak tahu huruf apa
+> yang Anda maksud. Untuk mengukur ketepatan satu huruf, pakai `--ukur HURUF`.
+
 ---
 
 ## Tombol saat program jalan

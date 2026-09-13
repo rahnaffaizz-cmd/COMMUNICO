@@ -175,12 +175,138 @@ class PengukurHuruf:
         t("=" * 66)
         return "\n".join(baris)
 
-    def simpan_rincian(self) -> Path | None:
+    def simpan_rincian_ukur(self) -> Path | None:
         """Tulis tiap frame ke berkas csv supaya bisa diperiksa lebih lanjut."""
         if not self._baris:
             return None
         FOLDER_LOG.mkdir(exist_ok=True)
         nama = f"ukur_{self.target}_{self.mulai.strftime('%Y%m%d_%H%M%S')}.csv"
+        path = FOLDER_LOG / nama
+        with open(path, "w", newline="", encoding="utf-8") as f:
+            penulis = csv.DictWriter(f, fieldnames=list(self._baris[0].keys()))
+            penulis.writeheader()
+            penulis.writerows(self._baris)
+        return path
+
+
+class StatistikSesi:
+    """Merekam pembacaan model sepanjang kamera menyala, lalu meringkasnya.
+
+    Bedanya dengan PengukurHuruf: di sini program TIDAK TAHU huruf apa yang
+    sebenarnya Anda maksud, jadi ketepatan tidak bisa dihitung. Yang bisa
+    dilaporkan adalah huruf apa saja yang ditebak model, seberapa yakin, dan
+    berapa yang berhasil lolos ambang sehingga masuk ke teks.
+
+    Justru itu yang paling sering ditanyakan: "kenapa huruf X tidak pernah
+    muncul padahal sudah saya peragakan?" Ringkasan ini menjawabnya sekaligus
+    untuk semua huruf dalam satu sesi.
+    """
+
+    def __init__(self, ambang: dict, jeda_lapor: float = 20.0):
+        self.ambang = ambang
+        self.jeda_lapor = jeda_lapor      # tiap berapa detik ringkasan dicetak
+        self.mulai = datetime.now()
+
+        self._baris: list[dict] = []
+        self._diterima: dict[str, int] = {}
+        self._lapor_berikutnya = jeda_lapor
+
+    def catat(self, huruf: str, keyakinan: float, jumlah_tangan: int,
+              detik: float) -> None:
+        self._baris.append({
+            "detik": round(detik, 2),
+            "tangan": jumlah_tangan,
+            "tebakan": huruf,
+            "keyakinan": round(keyakinan, 4),
+        })
+
+    def catat_diterima(self, huruf: str) -> None:
+        self._diterima[huruf] = self._diterima.get(huruf, 0) + 1
+
+    def saatnya_lapor(self, detik: float) -> bool:
+        """True sekali saja tiap kelipatan jeda_lapor, supaya tidak membanjiri."""
+        if detik >= self._lapor_berikutnya:
+            self._lapor_berikutnya += self.jeda_lapor
+            return True
+        return False
+
+    def ringkas_berjalan(self) -> str:
+        """Satu baris ringkas untuk dicatat berkala selagi kamera menyala."""
+        if not self._baris:
+            return "belum ada tangan terbaca"
+
+        hitung: dict[str, list[float]] = {}
+        for b in self._baris:
+            hitung.setdefault(b["tebakan"], []).append(b["keyakinan"])
+
+        # Tiga huruf yang paling sering muncul, beserta keyakinan rata-ratanya.
+        teratas = sorted(hitung.items(), key=lambda x: -len(x[1]))[:3]
+        bagian = ", ".join(
+            f"{h} {len(n)}x/{np.mean(n):.2f}" for h, n in teratas)
+        return f"{len(self._baris)} frame | tersering: {bagian}"
+
+    def laporan(self) -> str:
+        if not self._baris:
+            return "\nTidak ada tangan yang terbaca sepanjang sesi ini.\n"
+
+        n = len(self._baris)
+        hitung: dict[str, list[float]] = {}
+        for b in self._baris:
+            hitung.setdefault(b["tebakan"], []).append(b["keyakinan"])
+
+        baris = []
+        t = baris.append
+        t("")
+        t("=" * 72)
+        t("RINGKASAN SESI")
+        t("=" * 72)
+        t(f"  frame dengan tangan terbaca : {n}")
+        t(f"  huruf berbeda yang ditebak  : {len(hitung)}")
+        t(f"  huruf yang berhasil masuk   : "
+          f"{sum(self._diterima.values())} kali")
+        t("")
+        t("  huruf | frame | keyakinan          | ambang | masuk | keterangan")
+        t("        |       | rata  teng  maks   |        |       |")
+        t("  ------+-------+--------------------+--------+-------+------------------")
+
+        for huruf, nilai in sorted(hitung.items(), key=lambda x: -len(x[1])):
+            a = np.array(nilai)
+            batas = self.ambang.get(huruf, 0.45)
+            masuk = self._diterima.get(huruf, 0)
+
+            if masuk:
+                ket = "lolos"
+            elif batas >= 0.99:
+                ket = "DITOLAK di ambang_huruf.json"
+            elif a.max() < batas:
+                ket = f"keyakinan kurang, maks {a.max():.2f}"
+            else:
+                ket = "sempat cukup, voting belum penuh"
+
+            t(f"    {huruf}   | {len(a):5d} | {a.mean():.2f}  {np.median(a):.2f}  "
+              f"{a.max():.2f}   |  {batas:.2f}  | {masuk:5d} | {ket}")
+
+        # Jumlah tangan sangat menentukan untuk huruf dua tangan.
+        tangan = [b["tangan"] for b in self._baris]
+        t("")
+        t("  Jumlah tangan yang terbaca:")
+        for jumlah in sorted(set(tangan)):
+            berapa = tangan.count(jumlah)
+            t(f"    {jumlah} tangan: {berapa} frame ({berapa / n * 100:.1f}%)")
+
+        t("")
+        t("  Catatan: ini BUKAN ketepatan, karena program tidak tahu huruf apa")
+        t("  yang Anda maksud. Untuk mengukur ketepatan satu huruf, pakai")
+        t("  --ukur HURUF lalu peragakan huruf itu saja.")
+        t("=" * 72)
+        return "\n".join(baris)
+
+    def simpan_rincian(self) -> Path | None:
+        """Tulis tiap frame ke csv supaya bisa diperiksa di Excel."""
+        if not self._baris:
+            return None
+        FOLDER_LOG.mkdir(exist_ok=True)
+        nama = f"sesi_{self.mulai.strftime('%Y%m%d_%H%M%S')}.csv"
         path = FOLDER_LOG / nama
         with open(path, "w", newline="", encoding="utf-8") as f:
             penulis = csv.DictWriter(f, fieldnames=list(self._baris[0].keys()))

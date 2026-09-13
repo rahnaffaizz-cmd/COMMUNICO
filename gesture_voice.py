@@ -45,7 +45,7 @@ import numpy as np
 
 from catatan import Pencatat
 from fitur import ambil_fitur
-from pengukur import PengukurHuruf
+from pengukur import PengukurHuruf, StatistikSesi
 
 # Dua peringatan ini cuma berisik di layar, tidak bikin program rusak.
 warnings.filterwarnings("ignore", message="X does not have valid feature names")
@@ -347,6 +347,8 @@ def baca_argumen() -> argparse.Namespace:
     p.add_argument("--ambang-seragam", action="store_true",
                    help="abaikan ambang_huruf.json, pakai --min-keyakinan untuk "
                         "semua huruf. Huruf yang biasanya ditolak jadi ikut masuk")
+    p.add_argument("--jeda-ringkasan", type=float, default=20.0,
+                   help="tiap berapa detik ringkasan berjalan dicatat ke log")
     p.add_argument("--tanpa-catatan", action="store_true",
                    help="matikan pencatatan jalannya program")
     p.add_argument("--catat-detail", action="store_true",
@@ -439,6 +441,10 @@ def utama() -> int:
                          arg.min_keyakinan, arg.jeda, catat=catat,
                          ambang_huruf=ambang_huruf)
 
+    # Statistik sepanjang sesi, selalu aktif. Murah, dan menjawab pertanyaan
+    # "kenapa huruf X tidak pernah muncul" untuk semua huruf sekaligus.
+    statistik = StatistikSesi(ambang_huruf, jeda_lapor=arg.jeda_ringkasan)
+
     # Mode pengukuran satu huruf.
     pengukur = None
     if arg.ukur:
@@ -523,10 +529,16 @@ def utama() -> int:
                                          float(peluang[i_target]), tiga_besar,
                                          jumlah_tangan)
 
+                berjalan = sekarang - waktu_mulai
+                statistik.catat(tebakan, keyakinan, jumlah_tangan, berjalan)
+                if statistik.saatnya_lapor(berjalan):
+                    catat.kabar("PANTAU", statistik.ringkas_berjalan())
+
                 huruf_diterima = voting.masukkan(tebakan, keyakinan, sekarang)
                 if huruf_diterima:
                     teks += huruf_diterima
                     waktu_huruf_terakhir = sekarang
+                    statistik.catat_diterima(huruf_diterima)
                     catat.huruf_diterima(huruf_diterima, teks)
                     if not arg.tanpa_eja_huruf:
                         pengucap.ucapkan(huruf_diterima)
@@ -601,11 +613,18 @@ def utama() -> int:
         kamera.release()
         cv2.destroyAllWindows()
 
+    # Ringkasan sesi selalu ditampilkan: huruf apa saja yang terbaca, seberapa
+    # yakin, dan berapa yang berhasil lolos ambang.
+    print(statistik.laporan())
+    rincian_sesi = statistik.simpan_rincian()
+    if rincian_sesi:
+        print(f"Rincian tiap frame tersimpan di log/{rincian_sesi.name}")
+
     if pengukur is not None:
         print(pengukur.laporan())
-        rincian = pengukur.simpan_rincian()
+        rincian = pengukur.simpan_rincian_ukur()
         if rincian:
-            print(f"\nRincian tiap frame tersimpan di log/{rincian.name}")
+            print(f"\nRincian pengukuran tersimpan di log/{rincian.name}")
 
     return 0
 
