@@ -35,3 +35,6 @@ data/
 
 # Catatan jalannya program, dibuat baru setiap kali dijalankan.
 log/
+
+# Gambar bentuk huruf, dibuat ulang dengan lihat_huruf.py.
+bentuk/
