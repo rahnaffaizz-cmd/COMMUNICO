@@ -12,6 +12,8 @@ lebih buruk.
 | `rf_bisindo_v2.pkl` | 162 | titik dinormalkan + ukuran geometris jari |
 | `rf_bisindo_v3.pkl` | 166 | + letak relatif antar tangan (dx, dy, dz, jarak) |
 | `rf_bisindo_v4.pkl` | 169 | + sudut arah, ketegakan, dan selisih arah hadap |
+| `rf_bisindo_v5.pkl` | 172 | + jarak ujung jempol antar tangan dan jarak jempol-telunjuk silang |
+| `rf_bisindo_v6.pkl` | 197 | + jarak 5x5 ujung jari tangan kiri ke kanan (dua tangan dipandang sebagai satu bentuk) |
 
 ## Cara berpindah versi
 
@@ -41,6 +43,8 @@ fitur baru selalu **ditambahkan di belakang**, tidak pernah menyisip di tengah:
 126-161  ukuran geometris jari          -> berhenti di sini = 162 (v2)
 162-165  letak relatif dasar            -> berhenti di sini = 166 (v3)
 166-168  sudut, ketegakan, arah hadap   -> berhenti di sini = 169 (v4)
+169-171  titik sentuh ujung jari silang -> berhenti di sini = 172 (v5)
+172-196  jarak ujung jari kiri-kanan 5x5 -> berhenti di sini = 197 (v6)
 ```
 
 Jadi satu berkas `fitur.py` melayani semua versi model sekaligus, dan keduanya
@@ -76,6 +80,55 @@ bertumpuk   0.178   0.973   0.996   1.389      0.845
 Angka **ketegakan** memisahkan keduanya dengan sangat jelas, 0,07 berbanding
 0,85, dan hanya butuh satu percabangan untuk dipelajari.
 
+## Apa yang diperbaiki di v5
+
+v4 (dan v3 sebelumnya) melihat letak relatif tangan lewat **pergelangan**:
+sejajar atau bertumpuk. Tapi ada huruf yang bentuk jari dan susunan tangannya
+mirip, bedanya cuma **titik sentuhnya**: A adalah ujung jempol ketemu ujung
+jempol, S adalah ujung jempol satu tangan ketemu ujung telunjuk tangan
+lainnya. Pergelangan tidak melihat sampai sedetail itu.
+
+v5 menambahkan jarak ujung jempol-ke-jempol dan jarak jempol-ke-telunjuk
+silang (yang terkecil dari dua kemungkinan pasangan, karena urutan tangan
+dari MediaPipe tidak selalu sama antar frame), dihitung dari
+`_titik_sentuh_silang()` di `fitur.py`.
+
+Diuji dengan memutar ulang rekaman sesi nyata (`putar_ulang.py`) lewat v2 dan
+v5 dari koordinat identik:
+
+```
+v2 : ...SSSSSSASSSSSSSSSSSGSSSSSSSZ...   tersering: S 889x
+v5 : ...SSASFSAAAASSASSAAAAGSSSAAASSZZ...   tersering: A 581x
+```
+
+Deretan panjang S di v2 banyak yang berubah jadi A di v5. Pada foto contoh
+yang jawabannya sudah pasti benar, keyakinannya ikut naik untuk kedua huruf,
+bukan cuma tertukar:
+
+| Foto | Keyakinan v2 | Keyakinan v5 |
+|---|---|---|
+| `letter_A.jpg` | 0,81 | 0,86 |
+| `letter_S.jpg` | 0,37 | 0,60 |
+
+**Belum tentu ini perbaikan bersih.** Perubahan sebesar ini pada sesi bebas
+(bukan sesi terkontrol) bisa juga berarti A jadi kebablasan menelan S yang
+sebenarnya benar. Sama seperti peringatan di atas: perbandingan hanya berarti
+kalau ada jawaban yang benar-benar diketahui.
+
+**Sebelum mengganti versi bawaan ke v5**, uji secara terkontrol dulu:
+
+```powershell
+.\run.ps1 --model rf_bisindo_v5.pkl --ukur A    # peragakan A terus-menerus
+.\run.ps1 --model rf_bisindo_v5.pkl --ukur S    # lalu peragakan S terus-menerus
+```
+
+Atau rekam sesi baru lalu putar ulang dengan `--benar`:
+
+```powershell
+.\.venv\Scripts\python putar_ulang.py log\sesi_*.csv --benar A `
+    --model rf_bisindo_v2.pkl rf_bisindo_v5.pkl
+```
+
 ## Cara membandingkan dua versi secara adil
 
 Mencoba dua model bergantian di depan kamera **tidak adil**, karena peragaan
@@ -88,7 +141,7 @@ sama bisa disuapkan ke semua versi:
 ```powershell
 .\run.ps1                                    # rekam sekali, peragakan satu huruf
 .\.venv\Scripts\python putar_ulang.py log\sesi_*.csv --benar A `
-    --model rf_bisindo_v2.pkl rf_bisindo_v3.pkl rf_bisindo_v4.pkl
+    --model rf_bisindo_v2.pkl rf_bisindo_v3.pkl rf_bisindo_v4.pkl rf_bisindo_v5.pkl
 ```
 
 Keluarannya menampilkan teks yang dihasilkan tiap model dari rekaman yang

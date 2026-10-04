@@ -22,6 +22,14 @@ Tombol saat jendela kamera terbuka:
     SPASI      tambah spasi
     ENTER      ucapkan teks sekarang juga
     P          nyalakan / matikan ucap otomatis
+    1-9        ganti model secara langsung, lihat bar MODEL di pojok kiri atas
+
+Kalau ada lebih dari satu berkas rf_bisindo_*.pkl di folder ini, semuanya
+dimuat sekaligus dan bisa dipindah-pindah dengan tombol angka. Berguna untuk
+membandingkan versi model pada peragaan tangan yang identik, sesuatu yang
+tidak bisa didapat dengan mencoba dua model bergantian (peragaannya pasti
+sedikit berbeda tiap kali). Matikan dengan --satu-model kalau cuma ingin
+satu model saja, lebih ringan dan cepat dibuka.
 """
 
 from __future__ import annotations
@@ -53,7 +61,7 @@ from pengukur import PengukurHuruf, StatistikSesi
 warnings.filterwarnings("ignore", message="X does not have valid feature names")
 warnings.filterwarnings("ignore", message=".*GetPrototype.*")
 
-PATH_MODEL = "rf_bisindo_v2.pkl"
+PATH_MODEL = "rf_bisindo_v6.pkl"
 
 # Warna dipakai OpenCV dengan urutan BGR (biru, hijau, merah), bukan RGB.
 ABU, HIJAU, BIRU, PUTIH, KUNING, GELAP = (
@@ -406,6 +414,9 @@ def baca_argumen() -> argparse.Namespace:
                    help="tiap berapa detik ringkasan berjalan dicatat ke log")
     p.add_argument("--tanpa-catatan", action="store_true",
                    help="matikan pencatatan jalannya program")
+    p.add_argument("--satu-model", action="store_true",
+                   help="cuma muat satu model (--model), matikan bar pembanding "
+                        "versi. Startup lebih cepat dan hemat memori")
     p.add_argument("--catat-detail", action="store_true",
                    help="catat juga tiap tebakan dan kemajuan voting, bukan cuma "
                         "kejadian penting. Berguna untuk mencari tahu kenapa "
@@ -413,19 +424,63 @@ def baca_argumen() -> argparse.Namespace:
     return p.parse_args()
 
 
+# --------------------------------------------------------------- bar pembanding
+def cari_semua_model(folder: Path) -> list[str]:
+    """Daftar semua berkas rf_bisindo_*.pkl di folder ini, urut abjad."""
+    return sorted(p.name for p in folder.glob("rf_bisindo_*.pkl"))
+
+
+def _label_model(nama: str) -> str:
+    """Ringkas nama berkas jadi label pendek untuk bar, mis. rf_bisindo_v5.pkl -> v5."""
+    inti = nama
+    if inti.startswith("rf_bisindo_"):
+        inti = inti[len("rf_bisindo_"):]
+    if inti.endswith(".pkl"):
+        inti = inti[:-len(".pkl")]
+    return inti
+
+
+def geser_bar_model(daftar_model) -> int:
+    """Berapa piksel baris-baris di pojok kiri atas harus digeser ke bawah
+    supaya tidak bertumpuk dengan bar MODEL. 0 kalau barnya tidak ditampilkan."""
+    return 22 if len(daftar_model) > 1 else 0
+
+
+def gambar_bar_model(frame, daftar: list[str], aktif: str) -> None:
+    """Baris kecil di pojok kiri atas: daftar model yang bisa dipilih dengan
+    tombol angka, yang sedang aktif ditandai warna hijau dan tebal."""
+    x, y = 20, 18
+    cv2.putText(frame, "MODEL", (x, y), HURUF_FONT, 0.45, ABU, 1)
+    (lebar_awal, _), _ = cv2.getTextSize("MODEL ", HURUF_FONT, 0.45, 1)
+    x += lebar_awal + 4
+    for i, nama in enumerate(daftar, start=1):
+        aktif_ini = nama == aktif
+        teks = f"[{i}]{_label_model(nama)}"
+        warna = HIJAU if aktif_ini else ABU
+        tebal = 2 if aktif_ini else 1
+        cv2.putText(frame, teks, (x, y), HURUF_FONT, 0.45, warna, tebal)
+        (lebar, _), _ = cv2.getTextSize(teks, HURUF_FONT, 0.45, tebal)
+        x += lebar + 14
+
+
 # ---------------------------------------------------------------------- tampilan
 def gambar_tampilan(frame, *, mode, tebakan, keyakinan, huruf_voting, kemajuan_voting,
                     teks, sedang_bicara, hitung_mundur, ucap_setelah, auto_ucap,
-                    titik_tangan, mp_gambar, mp_tangan, tiga_besar=()):
+                    titik_tangan, mp_gambar, mp_tangan, tiga_besar=(),
+                    daftar_model=(), model_aktif=""):
     """Tulis semua info ke atas gambar kamera."""
     tinggi, lebar = frame.shape[:2]
+
+    geser = geser_bar_model(daftar_model)
+    if geser:
+        gambar_bar_model(frame, daftar_model, model_aktif)
 
     # Rangka tangan, biar kelihatan MediaPipe benar-benar menemukan tangannya.
     for tangan in titik_tangan:
         mp_gambar.draw_landmarks(frame, tangan, mp_tangan.HAND_CONNECTIONS)
 
     warna_mode = {"diam": ABU, "baca": HIJAU}[mode]
-    cv2.putText(frame, f"MODE: {mode.upper()}", (20, 35), HURUF_FONT, 0.7, warna_mode, 2)
+    cv2.putText(frame, f"MODE: {mode.upper()}", (20, 35 + geser), HURUF_FONT, 0.7, warna_mode, 2)
 
     # Huruf tebakan sementara, ditulis besar di tengah atas.
     if tebakan:
@@ -444,14 +499,14 @@ def gambar_tampilan(frame, *, mode, tebakan, keyakinan, huruf_voting, kemajuan_v
     if huruf_voting:
         isi = min(10, int(round(kemajuan_voting * 10)))
         batang = "#" * isi
-        cv2.putText(frame, f"voting {huruf_voting} [{batang:<10}]", (20, 65),
+        cv2.putText(frame, f"voting {huruf_voting} [{batang:<10}]", (20, 65 + geser),
                     HURUF_FONT, 0.6, KUNING, 1)
 
     # Tiga tebakan teratas di pojok kanan. Kalau huruf yang Anda maksud muncul
     # di urutan kedua atau ketiga, berarti model mengenalinya tapi kalah saing.
     for baris, (h, nilai) in enumerate(tiga_besar):
         warna = PUTIH if baris == 0 else ABU
-        cv2.putText(frame, f"{h} {nilai:.2f}", (lebar - 110, 35 + baris * 24),
+        cv2.putText(frame, f"{h} {nilai:.2f}", (lebar - 110, 35 + geser + baris * 24),
                     HURUF_FONT, 0.6, warna, 2 if baris == 0 else 1)
 
     # Kotak gelap di bawah untuk teks yang sudah terkumpul.
@@ -476,6 +531,8 @@ def gambar_tampilan(frame, *, mode, tebakan, keyakinan, huruf_voting, kemajuan_v
                     HURUF_FONT, 0.55, ABU, 1)
 
     bantuan = "Q keluar  BKSP hapus  C bersih  SPASI _  ENTER ucap  P otomatis"
+    if len(daftar_model) > 1:
+        bantuan += "  1-9 ganti model"
     cv2.putText(frame, bantuan, (lebar - 600, tinggi - 8), HURUF_FONT, 0.45, ABU, 1)
 
 
@@ -485,16 +542,43 @@ def utama() -> int:
 
     catat = Pencatat(aktif=not arg.tanpa_catatan, detail=arg.catat_detail)
 
-    berkas_model = Path(__file__).resolve().parent / arg.model
+    folder_model = Path(__file__).resolve().parent
+    berkas_model = folder_model / arg.model
     if not berkas_model.exists():
         print(f"GAGAL: berkas model '{arg.model}' tidak ada.")
-        tersedia = sorted(p.name for p in berkas_model.parent.glob("*.pkl"))
+        tersedia = sorted(p.name for p in folder_model.glob("*.pkl"))
         print(f"Yang tersedia: {', '.join(tersedia)}")
         return 1
 
-    model = joblib.load(berkas_model)
+    # Muat semua versi model sekaligus supaya bisa dibandingkan langsung lewat
+    # tombol angka, kecuali kalau --satu-model dipakai (lebih ringan dan cepat).
+    daftar_nama_model = [arg.model]
+    if not arg.satu_model:
+        daftar_nama_model = cari_semua_model(folder_model)
+        if arg.model not in daftar_nama_model:
+            daftar_nama_model.append(arg.model)
+            daftar_nama_model.sort()
+
+    kumpulan_model: dict[str, object] = {}
+    for nama in daftar_nama_model:
+        try:
+            kumpulan_model[nama] = joblib.load(folder_model / nama)
+        except Exception as e:  # noqa: BLE001 - berkas rusak/tidak kompatibel
+            catat.kabar("MODEL", f"gagal memuat {nama}, dilewati ({e})")
+    daftar_nama_model = [n for n in daftar_nama_model if n in kumpulan_model]
+
+    if arg.model not in kumpulan_model:
+        print(f"GAGAL: model utama '{arg.model}' tidak bisa dimuat.")
+        return 1
+
+    nama_model_aktif = arg.model
+    model = kumpulan_model[nama_model_aktif]
     catat.mulai(arg.model, model.n_features_in_, "".join(model.classes_),
                 arg.bahasa, arg.kamera)
+    if len(daftar_nama_model) > 1:
+        catat.kabar("MODEL", f"bar pembanding aktif, {len(daftar_nama_model)} versi "
+                              f"dimuat: {', '.join(daftar_nama_model)} "
+                              f"-- tekan angka 1-{len(daftar_nama_model)} untuk berpindah")
 
     ambang_huruf = {} if arg.ambang_seragam else muat_ambang_huruf(catat)
 
@@ -642,11 +726,13 @@ def utama() -> int:
                 titik_tangan=hasil.multi_hand_landmarks or [],
                 mp_gambar=mp_gambar, mp_tangan=mp_tangan,
                 tiga_besar=tiga_besar,
+                daftar_model=daftar_nama_model, model_aktif=nama_model_aktif,
             )
 
             if pengukur is not None:
                 # Angka berjalan supaya Anda tahu kapan datanya sudah cukup.
-                cv2.putText(frame, pengukur.ringkas_singkat(), (20, 95),
+                cv2.putText(frame, pengukur.ringkas_singkat(),
+                            (20, 95 + geser_bar_model(daftar_nama_model)),
                             HURUF_FONT, 0.6, KUNING, 2)
 
             cv2.imshow("BISINDO ke Suara   (tekan Q untuk keluar)", frame)
@@ -671,6 +757,19 @@ def utama() -> int:
             elif tombol == ord("p"):                # P
                 auto_ucap = not auto_ucap
                 catat.kabar("ATUR", f"ucap otomatis {'menyala' if auto_ucap else 'mati'}")
+            elif ord("1") <= tombol <= ord("9"):     # 1-9: ganti model aktif
+                indeks = tombol - ord("1")
+                if indeks < len(daftar_nama_model):
+                    baru = daftar_nama_model[indeks]
+                    if baru != nama_model_aktif:
+                        nama_model_aktif = baru
+                        model = kumpulan_model[baru]
+                        # Riwayat voting dari model lama tidak nyambung dengan
+                        # tebakan model baru, jadi dikosongkan supaya tidak
+                        # tercampur antara dua model berbeda.
+                        voting.kosongkan()
+                        catat.kabar("MODEL", f"beralih ke {nama_model_aktif} "
+                                              f"({model.n_features_in_} fitur)")
     finally:
         # Bagian ini selalu dijalankan, walaupun program berhenti karena error
         # atau jendelanya ditutup lewat tombol X, bukan tombol Q.
