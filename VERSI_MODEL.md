@@ -199,3 +199,15 @@ huruf dua tangan (H, K, P, X, Y paling sering), v7 pindah ke cabang satu
 tangan dan menjawab U, J, Z, atau L. Kembali ke v6 dengan
 `.un.ps1 --model rf_bisindo_v6.pkl`.
 
+### Tangan hilang sesaat (--tahan-tangan-hilang)
+
+Frame satu tangan yang muncul dalam 15 frame setelah dua tangan terlihat
+dilewati oleh gesture_voice.py, karena hampir selalu itu tangan yang hilang
+dari deteksi MediaPipe, bukan huruf satu tangan. Diuji ulang pada rekaman:
+K 84% -> 100%, H 81% -> 99%, X 66% -> 96%. Biayanya, huruf satu tangan yang
+diperagakan tepat setelah huruf dua tangan baru terbaca sekitar 0,75 detik
+kemudian. Matikan dengan `--tahan-tangan-hilang 0`.
+
+Sesi M kedua (ukur_M_20261004_120718) ternyata bentuknya sama dengan A, jadi
+dikeluarkan dari data latih dan disimpan di log/dibuang/.
+

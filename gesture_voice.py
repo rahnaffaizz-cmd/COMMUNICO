@@ -418,6 +418,12 @@ def baca_argumen() -> argparse.Namespace:
                    help="mode pengukuran: peragakan satu huruf terus-menerus, "
                         "nanti dilaporkan seberapa baik huruf itu terbaca oleh "
                         "kamera Anda sendiri. Contoh: --ukur I")
+    p.add_argument("--tahan-tangan-hilang", type=int, default=15, metavar="FRAME",
+                   help="abaikan frame satu tangan yang muncul dalam sekian frame "
+                        "setelah dua tangan terlihat (bawaan 15, 0 untuk mematikan). "
+                        "MediaPipe sering kehilangan satu tangan sesaat saat huruf "
+                        "dua tangan diperagakan, dan model v7 lalu menjawab J, Z, U, "
+                        "atau R")
     p.add_argument("--ambang-seragam", action="store_true",
                    help="abaikan ambang_huruf.json, pakai --min-keyakinan untuk "
                         "semua huruf. Huruf yang biasanya ditolak jadi ikut masuk")
@@ -638,6 +644,9 @@ def utama() -> int:
     teks = ""
     waktu_huruf_terakhir = float("-inf")
     sejak_tangan_hilang: float | None = None
+    # Mulai dari angka besar supaya satu tangan di awal (huruf satu tangan) tidak
+    # dianggap tangan yang hilang.
+    frame_sejak_dua_tangan = 10 ** 9
     auto_ucap = not arg.tanpa_auto_ucap
     jumlah_frame = 0
     waktu_mulai = time.monotonic()
@@ -662,7 +671,22 @@ def utama() -> int:
             tebakan, keyakinan = "", 0.0
             tiga_besar = []
 
-            if angka is not None:
+            # Satu tangan yang muncul sesaat setelah dua tangan hampir selalu
+            # tangan yang hilang dari deteksi, bukan huruf satu tangan. Frame
+            # itu dilewati dan riwayat voting dibiarkan utuh.
+            if jumlah_tangan == 2:
+                frame_sejak_dua_tangan = 0
+            elif jumlah_tangan == 1:
+                frame_sejak_dua_tangan += 1
+            else:
+                frame_sejak_dua_tangan = 10 ** 9      # tangan lenyap: urutan selesai
+            tangan_goyah = (jumlah_tangan == 1
+                            and frame_sejak_dua_tangan <= arg.tahan_tangan_hilang)
+
+            if angka is not None and tangan_goyah:
+                sejak_tangan_hilang = None
+                mode = "baca"
+            elif angka is not None:
                 if sejak_tangan_hilang is not None:
                     catat.tangan(jumlah_tangan)
                 sejak_tangan_hilang = None
