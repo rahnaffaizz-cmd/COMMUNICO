@@ -39,6 +39,10 @@ def dua_tangan_terlihat(fitur: np.ndarray) -> np.ndarray:
 
 
 class ModelDuaCabang:
+    # Model ini dilatih dengan tangan diurutkan kiri ke kanan (fitur.urutkan_tangan).
+    # Program yang memuatnya wajib melakukan hal yang sama saat menghitung fitur.
+    urut_tangan = True
+
     def __init__(self, model_satu, model_dua, jumlah_fitur: int):
         self.model_satu = model_satu
         self.model_dua = model_dua

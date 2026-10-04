@@ -281,11 +281,34 @@ def _jarak_ujung_silang(mentah_titik: np.ndarray) -> np.ndarray:
     return hasil
 
 
-def ambil_fitur(mentah: np.ndarray) -> np.ndarray:
+def urutkan_tangan(mentah_titik: np.ndarray) -> np.ndarray:
+    """Susun dua tangan dari kiri ke kanan layar menurut letak pergelangannya.
+
+    MediaPipe tidak menjamin tangan mana yang disebut pertama, dan urutannya
+    bisa berbeda antar frame atau antar sesi. Fitur letak relatif (dx, dy, sudut)
+    dihitung "tangan kedua dikurangi tangan pertama", jadi urutan yang terbalik
+    membalik tandanya. Akibatnya bentuk yang SAMA bisa terbaca sebagai huruf
+    lain: K dengan dx dan dy terbalik terbaca H, dan A terbaca M. Dengan urutan
+    kiri-ke-kanan yang tetap, tanda itu menjadi ciri bentuk, bukan kebetulan.
+
+    Hanya baris yang kedua tangannya terlihat yang ditukar.
+    """
+    ada = np.abs(mentah_titik).sum(axis=(2, 3)) > 1e-9
+    tukar = ada[:, 0] & ada[:, 1] & (mentah_titik[:, 0, 0, 0] > mentah_titik[:, 1, 0, 0])
+    hasil = mentah_titik.copy()
+    hasil[tukar] = mentah_titik[tukar][:, ::-1]
+    return hasil
+
+
+def ambil_fitur(mentah: np.ndarray, urut_tangan: bool = False) -> np.ndarray:
     """Ubah titik mentah jadi 197 angka siap pakai.
 
     Menerima satu sampel (126 angka) maupun banyak sampel sekaligus (n, 126).
     Keluarannya selalu berbentuk (n, 197).
+
+    urut_tangan=True menyusun tangan dari kiri ke kanan dulu (lihat
+    urutkan_tangan). Model lama dilatih tanpa itu, jadi bawaannya mati; model
+    v7 yang dilatih dengan itu menandai dirinya lewat `urut_tangan = True`.
     """
     mentah = np.asarray(mentah, dtype=np.float32)
     if mentah.ndim == 1:
@@ -300,6 +323,8 @@ def ambil_fitur(mentah: np.ndarray) -> np.ndarray:
     mentah = np.nan_to_num(mentah, nan=0.0)
 
     mentah_titik = mentah.reshape(-1, 2, JUMLAH_TITIK, 3)
+    if urut_tangan:
+        mentah_titik = urutkan_tangan(mentah_titik)
 
     # Letak relatif dan titik sentuh dihitung LEBIH DULU, selagi koordinatnya
     # masih mentah. Setelah dinormalkan, keterangan itu sudah hilang dan tidak

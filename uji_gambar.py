@@ -103,7 +103,9 @@ def utama() -> int:
             continue
 
         # Diolah dulu lewat fitur.py, sama seperti waktu model dilatih.
-        fitur = sesuaikan_untuk(ambil_fitur(angka), model.n_features_in_)
+        fitur = sesuaikan_untuk(
+            ambil_fitur(angka, getattr(model, "urut_tangan", False)),
+            model.n_features_in_)
         peluang = model.predict_proba(fitur)[0]
         indeks = int(np.argmax(peluang))
         tebakan = model.classes_[indeks]

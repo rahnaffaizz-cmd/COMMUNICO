@@ -181,7 +181,7 @@ def utama() -> int:
 
     X_mentah, y, grup, bobot = muat_data()
     print(f"Data: {len(y)} sampel, {len(np.unique(y))} huruf")
-    X = ambil_fitur(X_mentah)
+    X = ambil_fitur(X_mentah, urut_tangan=True)
 
     judul("MENGUKUR (5 lipatan per foto asli)")
     tebak_cabang, tebak_satu, yakin_cabang = ukur(X, y, grup, bobot)

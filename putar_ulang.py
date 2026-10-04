@@ -63,7 +63,9 @@ def jalankan(model, titik, df, ambang, arg):
     import gesture_voice as gv
     from fitur import ambil_fitur, sesuaikan_untuk
 
-    fitur = sesuaikan_untuk(ambil_fitur(titik), model.n_features_in_)
+    fitur = sesuaikan_untuk(
+        ambil_fitur(titik, getattr(model, "urut_tangan", False)),
+        model.n_features_in_)
     peluang = model.predict_proba(fitur)
     pilih = peluang.argmax(axis=1)
     tebakan = model.classes_[pilih]

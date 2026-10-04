@@ -211,3 +211,16 @@ kemudian. Matikan dengan `--tahan-tangan-hilang 0`.
 Sesi M kedua (ukur_M_20261004_120718) ternyata bentuknya sama dengan A, jadi
 dikeluarkan dari data latih dan disimpan di log/dibuang/.
 
+### Urutan tangan kiri-ke-kanan (urut_tangan)
+
+MediaPipe tidak menjamin tangan mana yang disebut pertama. Fitur letak relatif
+(dx, dy, sudut) dihitung "tangan kedua dikurangi pertama", jadi urutan terbalik
+membalik tandanya dan bentuk yang sama bisa terbaca huruf lain (K sebagai H,
+A sebagai M). `fitur.urutkan_tangan` menyusun tangan dari kiri ke kanan layar,
+dan v7 ditandai `urut_tangan = True` supaya gesture_voice.py, uji_gambar.py,
+dan putar_ulang.py melakukan hal yang sama. Model v2 sampai v6 tidak berubah.
+Uji tukar tangan pada rekaman K, H, A, M: tebakan tidak berubah sama sekali.
+
+Berkas v7 sebelum ini (commit 1b0ff37) dilatih tanpa urutan tetap dan TIDAK
+cocok dengan fitur.py yang sekarang.
+

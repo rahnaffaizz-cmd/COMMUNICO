@@ -694,7 +694,9 @@ def utama() -> int:
 
                 # Titik mentah diolah dulu jadi 162 angka lewat fitur.py,
                 # persis seperti waktu modelnya dilatih.
-                fitur = sesuaikan_untuk(ambil_fitur(angka), model.n_features_in_)
+                fitur = sesuaikan_untuk(
+                    ambil_fitur(angka, getattr(model, "urut_tangan", False)),
+                    model.n_features_in_)
                 peluang = model.predict_proba(fitur)[0]
                 indeks_tertinggi = int(np.argmax(peluang))
                 tebakan = model.classes_[indeks_tertinggi]
