@@ -340,15 +340,26 @@ def vektor_titik_tangan(hasil) -> tuple[np.ndarray | None, int]:
 
 
 # ------------------------------------------------------------------ ambang huruf
-def muat_ambang_huruf(catat=None) -> dict:
+def muat_ambang_huruf(catat=None, nama_model: str | None = None) -> dict:
     """Baca ambang keyakinan tiap huruf dari ambang_huruf.json, kalau ada.
 
     Berkas itu dibuat oleh diagnosa.py. Isinya ambang yang berbeda-beda karena
     tiap huruf perilakunya tidak sama: G hampir selalu benar sehingga ambang
     rendah pun aman, sedangkan E justru lebih sering yakin waktu salah sehingga
     lebih baik ditolak sama sekali.
+
+    Kalau ada ambang_<nama model>.json (misalnya ambang_rf_bisindo_v7.pkl ->
+    ambang_rf_bisindo_v7.json), berkas itu dipakai untuk model tersebut. Ambang
+    dari satu model tidak cocok untuk model lain: keyakinan tiap model punya
+    skala sendiri, dan huruf yang ditolak di model lama bisa terbaca bagus di
+    model baru.
     """
-    berkas = Path(__file__).resolve().parent / "ambang_huruf.json"
+    folder = Path(__file__).resolve().parent
+    berkas = folder / "ambang_huruf.json"
+    if nama_model:
+        khusus = folder / f"ambang_{Path(nama_model).stem}.json"
+        if khusus.exists():
+            berkas = khusus
     if not berkas.exists():
         if catat:
             catat.kabar("AMBANG", "ambang_huruf.json tidak ada, semua huruf "
@@ -580,7 +591,8 @@ def utama() -> int:
                               f"dimuat: {', '.join(daftar_nama_model)} "
                               f"-- tekan angka 1-{len(daftar_nama_model)} untuk berpindah")
 
-    ambang_huruf = {} if arg.ambang_seragam else muat_ambang_huruf(catat)
+    ambang_huruf = ({} if arg.ambang_seragam
+                    else muat_ambang_huruf(catat, arg.model))
 
     pengucap = Pengucap(bahasa=arg.bahasa, pelan=arg.pelan, catat=catat)
     voting = VotingHuruf(arg.jendela_voting, arg.frame_konfirmasi,
@@ -768,6 +780,8 @@ def utama() -> int:
                         # tebakan model baru, jadi dikosongkan supaya tidak
                         # tercampur antara dua model berbeda.
                         voting.kosongkan()
+                        if not arg.ambang_seragam:
+                            voting.ambang_huruf = muat_ambang_huruf(catat, baru)
                         catat.kabar("MODEL", f"beralih ke {nama_model_aktif} "
                                               f"({model.n_features_in_} fitur)")
     finally:

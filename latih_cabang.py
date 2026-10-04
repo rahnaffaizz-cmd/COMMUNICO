@@ -68,8 +68,13 @@ def muat_data():
         p = pd.read_csv(BERKAS_PENGGUNA)
         X_p = np.nan_to_num(p[[f"k{i}" for i in range(126)]].values)
         y_p = p["label"].values
-        grup_p = np.array([f"{h}_pengguna_{s}" for h, s in zip(p["label"], p["sesi"])],
-                          dtype=object)
+        # Satu sesi rekaman dipotong jadi 5 bagian menurut urutan waktu. Tanpa ini,
+        # satu sesi = satu kelompok utuh yang tidak pernah dilihat saat latihan,
+        # dan ketepatannya jadi terlalu pesimis. Dengan dipotong, kebocoran antar
+        # frame berdekatan membuat angka huruf milik Anda sedikit terlalu optimis.
+        urutan = p.groupby("sesi").cumcount() * 5 // p.groupby("sesi")["sesi"].transform("size")
+        grup_p = np.array([f"{h}_pengguna_{s}_{u}" for h, s, u in
+                           zip(p["label"], p["sesi"], urutan)], dtype=object)
         X_mentah = np.vstack([X_mentah, X_p])
         y = np.concatenate([y, y_p])
         grup = np.concatenate([grup, grup_p])
@@ -84,15 +89,18 @@ def ukur(X, y, grup, bobot):
 
     tebak_cabang = np.empty(len(y), dtype=object)
     tebak_satu = np.empty(len(y), dtype=object)
+    yakin_cabang = np.zeros(len(y))
     for nomor, (latih, uji) in enumerate(GroupKFold(5).split(X, y, groups=grup), 1):
         cabang = latih_dua_cabang(X[latih], y[latih], bobot[latih])
-        tebak_cabang[uji] = cabang.predict(X[uji])
+        peluang = cabang.predict_proba(X[uji])
+        tebak_cabang[uji] = cabang.classes_[peluang.argmax(axis=1)]
+        yakin_cabang[uji] = peluang.max(axis=1)
 
         satu = buat_model().fit(X[latih], y[latih], sample_weight=bobot[latih])
         tebak_satu[uji] = satu.predict(X[uji])
         print(f"    lipatan {nomor}: dua cabang {np.mean(tebak_cabang[uji] == y[uji]) * 100:6.2f}%"
               f"   satu cabang {np.mean(tebak_satu[uji] == y[uji]) * 100:6.2f}%")
-    return tebak_cabang, tebak_satu
+    return tebak_cabang, tebak_satu, yakin_cabang
 
 
 def laporkan(X, y, tebak_cabang, tebak_satu) -> None:
@@ -127,6 +135,43 @@ def laporkan(X, y, tebak_cabang, tebak_satu) -> None:
               f"dua cabang {np.mean(tebak_cabang[p] == ke) * 100:5.1f}%")
 
 
+def tulis_ambang(y, tebak, yakin, sah, berkas_model: Path, target: float = 0.80) -> None:
+    """Hitung ambang tiap huruf dari tebakan yang belum pernah dilihat model.
+
+    Cara yang sama dengan diagnosa.py: ambang terendah yang membuat tebakan
+    huruf itu benar minimal `target`. Hasilnya ke ambang_<nama model>.json,
+    yang dipakai gesture_voice.py hanya untuk model ini.
+    """
+    import json
+
+    from diagnosa import AMBANG_MENYERAH, cari_ambang
+
+    # Hanya sampel yang sesuai aturan satu/dua tangan yang dinilai. Sampel yang
+    # tidak mungkin benar (huruf dua tangan yang direkam dengan satu tangan di
+    # dataset) akan salah diterbaca sebagai huruf satu tangan dan merusak
+    # presisi C, E, O, V, padahal saat dipakai Anda mengikuti aturannya.
+    y, tebak, yakin = y[sah], tebak[sah], yakin[sah]
+
+    ambang = {}
+    for huruf in sorted(np.unique(y)):
+        ditebak = tebak == huruf
+        if not ditebak.any():
+            ambang[huruf] = AMBANG_MENYERAH
+            continue
+        nilai, _, _ = cari_ambang(y[ditebak] == huruf, yakin[ditebak], target)
+        ambang[huruf] = nilai
+
+    berkas = berkas_model.with_name(f"ambang_{berkas_model.stem}.json")
+    berkas.write_text(json.dumps({
+        "target_presisi": target * 100,
+        "ambang": ambang,
+        "keterangan": (f"Ambang untuk {berkas_model.name}, dihitung latih_cabang.py "
+                       f"dari tebakan per foto asli. {AMBANG_MENYERAH} berarti ditolak."),
+    }, indent=2), encoding="utf-8")
+    ditolak = " ".join(h for h, v in ambang.items() if v >= AMBANG_MENYERAH) or "-"
+    print(f"  Ambang ditulis ke {berkas.name}. Huruf yang ditolak: {ditolak}")
+
+
 def utama() -> int:
     p = argparse.ArgumentParser(description="Melatih model dua cabang (v7)")
     p.add_argument("--keluaran", type=Path, default=KELUARAN_BAWAAN)
@@ -139,13 +184,16 @@ def utama() -> int:
     X = ambil_fitur(X_mentah)
 
     judul("MENGUKUR (5 lipatan per foto asli)")
-    tebak_cabang, tebak_satu = ukur(X, y, grup, bobot)
+    tebak_cabang, tebak_satu, yakin_cabang = ukur(X, y, grup, bobot)
     laporkan(X, y, tebak_cabang, tebak_satu)
 
     judul("MELATIH MODEL AKHIR")
     model = latih_dua_cabang(X, y, bobot)
     joblib.dump(model, arg.keluaran, compress=3)
     print(f"  Disimpan: {arg.keluaran.name} ({arg.keluaran.stat().st_size / 1048576:.1f} MB)")
+    dua = dua_tangan_terlihat(X)
+    sah = ~((dua & np.isin(y, HURUF_SATU_TANGAN)) | (~dua & ~np.isin(y, HURUF_SATU_TANGAN)))
+    tulis_ambang(y, tebak_cabang, yakin_cabang, sah, arg.keluaran)
     print(f"  Coba:  .\\run.ps1 --model {arg.keluaran.name}")
     return 0
 
