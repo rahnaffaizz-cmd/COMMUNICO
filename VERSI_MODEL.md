@@ -14,6 +14,7 @@ lebih buruk.
 | `rf_bisindo_v4.pkl` | 169 | + sudut arah, ketegakan, dan selisih arah hadap |
 | `rf_bisindo_v5.pkl` | 172 | + jarak ujung jempol antar tangan dan jarak jempol-telunjuk silang |
 | `rf_bisindo_v6.pkl` | 197 | + jarak 5x5 ujung jari tangan kiri ke kanan (dua tangan dipandang sebagai satu bentuk) |
+| `rf_bisindo_v7.pkl` | 197 | fitur sama dengan v6, tapi dua cabang: satu tangan -> C E I J L O R U V Z, dua tangan -> sisanya (`cabang.py`, dilatih `latih_cabang.py`) |
 
 ## Cara berpindah versi
 
@@ -163,3 +164,24 @@ pemakaian nyata:
 **Pilih versi berdasarkan pengujian dengan kamera Anda sendiri, bukan
 berdasarkan angka dataset.** Itulah sebabnya semua versi disimpan, bukan
 ditimpa.
+
+## v7: dua cabang menurut jumlah tangan
+
+Jumlah tangan yang terlihat dijadikan aturan tetap, bukan ditebak model:
+satu tangan hanya bisa menjawab C E I J L O R U V Z, dua tangan hanya bisa
+menjawab 16 huruf sisanya. Pengujian per foto asli:
+
+| | v6 | v7 |
+|---|---|---|
+| semua sampel | 63,8% | 56,8% |
+| sampel yang sesuai aturan | 71,2% | 86,4% |
+
+Skor semua sampel lebih rendah karena 34% dataset melanggar aturan ini (huruf
+dua tangan yang direkam dengan satu tangan, misalnya A 54%, B 64%, Y 91%).
+Huruf-huruf itu tidak mungkin benar di v7. Y paling parah (4%) karena hampir
+semua sampelnya satu tangan; rekam Y dengan dua tangan (`rekam.py`) kalau
+mau memakainya. Kalau MediaPipe kehilangan satu tangan di tengah peragaan
+huruf dua tangan, v7 berpindah cabang dan bisa menjawab huruf satu tangan.
+
+Memuat v7 butuh `cabang.py` di folder yang sama.
+

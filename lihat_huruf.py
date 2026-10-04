@@ -133,11 +133,66 @@ def gambar_huruf(huruf: str, X: np.ndarray, y: np.ndarray, per_baris: int = 3):
     return path
 
 
+def gambar_lembar(X: np.ndarray, y: np.ndarray, kolom: int = 6):
+    """Satu gambar berisi A sampai Z, satu bentuk tangan per huruf.
+
+    Jumlah tangan mengikuti aturan model v7 (cabang.py): huruf satu tangan
+    digambar dari sampel satu tangan, huruf dua tangan dari sampel dua tangan.
+    Yang digambar adalah sampel paling khas, yaitu yang terdekat ke rata-rata.
+    Pada gambar dua tangan, biru selalu tangan di sebelah KIRI layar dan merah
+    di sebelah KANAN, supaya warnanya tidak berganti-ganti hanya karena urutan
+    dari MediaPipe.
+    """
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    from cabang import HURUF_SATU_TANGAN
+
+    huruf_semua = sorted(np.unique(y))
+    baris_total = -(-len(huruf_semua) // kolom)
+    gambar, sumbu = plt.subplots(baris_total, kolom,
+                                 figsize=(kolom * 2.2, baris_total * 2.6), squeeze=False)
+    for kotak in sumbu.ravel():
+        kotak.axis("off")
+
+    for nomor, huruf in enumerate(huruf_semua):
+        pilih = X[y == huruf]
+        dua = np.array([tangan_ada(ambil_tangan(b, 1)) for b in pilih])
+        mau_dua = huruf not in HURUF_SATU_TANGAN
+        data = pilih[dua] if mau_dua else pilih[~dua]
+        kotak = sumbu[nomor // kolom][nomor % kolom]
+        if len(data) == 0:
+            kotak.set_title(f"{huruf}  (tidak ada sampel)", fontsize=10)
+            continue
+
+        contoh = data[contoh_paling_khas(data, 1)[0]].copy()
+        if mau_dua and contoh[0] > contoh[63]:
+            contoh = np.concatenate([contoh[63:], contoh[:63]])
+        kotak.axis("on")
+        gambar_satu(kotak, contoh, "")
+        kotak.set_title(f"{huruf}  {'2' if mau_dua else '1'} tangan  "
+                        f"({len(data) / len(pilih) * 100:.0f}%)",
+                        fontsize=10, fontweight="bold")
+
+    gambar.suptitle("Bentuk tangan huruf A-Z menurut aturan v7  "
+                    "(2 tangan: biru = kiri layar, merah = kanan layar)",
+                    fontsize=12, fontweight="bold")
+    gambar.tight_layout()
+    FOLDER_GAMBAR.mkdir(exist_ok=True)
+    path = FOLDER_GAMBAR / "semua_huruf.png"
+    gambar.savefig(path, dpi=100, bbox_inches="tight")
+    plt.close(gambar)
+    return path
+
+
 def utama() -> int:
     p = argparse.ArgumentParser(
         description="Menggambar ulang bentuk tangan tiap huruf dari dataset")
     p.add_argument("huruf", nargs="*", help="huruf yang ingin dilihat, misalnya A S")
     p.add_argument("--semua", action="store_true", help="gambar semua 26 huruf")
+    p.add_argument("--satu-gambar", action="store_true",
+                   help="gabungkan A sampai Z jadi satu gambar (bentuk/semua_huruf.png)")
     p.add_argument("--contoh", type=int, default=3,
                    help="berapa contoh ditampilkan tiap jenis")
     arg = p.parse_args()
@@ -153,6 +208,11 @@ def utama() -> int:
 
     X, y = siapkan_data()
     print(f"Data: {len(X)} sampel, {len(np.unique(y))} huruf\n")
+
+    if arg.satu_gambar:
+        path = gambar_lembar(X, y)
+        print(f"Tersimpan: {path.relative_to(FOLDER)}")
+        return 0
 
     daftar = sorted(np.unique(y)) if arg.semua else [h.upper() for h in arg.huruf]
     if not daftar:

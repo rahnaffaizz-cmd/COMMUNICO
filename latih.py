@@ -7,6 +7,10 @@ angkanya jujur. Penjelasan lengkap soal ini ada di evaluasi.py.
     python latih.py                     latih, bandingkan, simpan kalau lebih baik
     python latih.py --paksa             tetap simpan walaupun lebih buruk
     python latih.py --keluaran lain.pkl simpan ke nama berkas lain
+    python latih.py --bobot-pengguna 5  rekaman sendiri dihitung 5x lebih berat
+
+Kalau ada data/data_pengguna.csv (dibuat oleh rekam.py), isinya ikut dilatihkan
+bersama dataset bawaan. Tiap sesi rekaman dihitung satu kelompok saat pengujian.
 
 Fitur yang dipakai diambil dari fitur.py, berkas yang sama dengan yang dipakai
 program utama saat berjalan. Ini penting: kalau keduanya berbeda hitungan,
@@ -29,7 +33,8 @@ from fitur import ambil_fitur  # noqa: E402
 
 FOLDER = Path(__file__).resolve().parent
 MODEL_LAMA = FOLDER / "rf_bisindo_99.pkl"
-MODEL_BARU = FOLDER / "rf_bisindo_v2.pkl"
+MODEL_BARU = FOLDER / "rf_bisindo_v8.pkl"
+BERKAS_PENGGUNA = FOLDER / "data" / "data_pengguna.csv"
 
 # Hasil pengukuran model lama, dipakai sebagai ambang kelulusan.
 ACUAN_LAMA = 46.69
@@ -45,14 +50,15 @@ def buat_model():
     return RandomForestClassifier(n_estimators=300, random_state=42, n_jobs=-1)
 
 
-def ukur(X, y, grup, nama: str):
+def ukur(X, y, grup, nama: str, bobot=None):
     """Latih dan uji 5 kali dengan pembagian per foto, lalu rata-ratakan."""
     from sklearn.metrics import f1_score
     from sklearn.model_selection import GroupKFold
 
     akurasi, f1, benar, total = [], [], {}, {}
     for nomor, (latih, uji) in enumerate(GroupKFold(5).split(X, y, groups=grup), 1):
-        model = buat_model().fit(X[latih], y[latih])
+        model = buat_model().fit(X[latih], y[latih],
+                                 sample_weight=None if bobot is None else bobot[latih])
         tebak = model.predict(X[uji])
 
         akurasi.append((tebak == y[uji]).mean())
@@ -74,6 +80,9 @@ def utama() -> int:
     p = argparse.ArgumentParser(description="Melatih ulang model pengenal huruf BISINDO")
     p.add_argument("--keluaran", type=Path, default=MODEL_BARU,
                    help="nama berkas untuk menyimpan model")
+    p.add_argument("--bobot-pengguna", type=float, default=3.0,
+                   help="seberapa berat rekaman sendiri dibanding dataset bawaan "
+                        "(bawaan 3)")
     p.add_argument("--paksa", action="store_true",
                    help="tetap simpan walaupun hasilnya lebih buruk dari model lama")
     arg = p.parse_args()
@@ -85,14 +94,31 @@ def utama() -> int:
     print(f"Data: {len(X_mentah)} sampel, {len(np.unique(y))} huruf, "
           f"{len(set(grup))} kelompok foto")
 
+    bobot = np.ones(len(y))
+    if BERKAS_PENGGUNA.exists():
+        import pandas as pd
+
+        pengguna = pd.read_csv(BERKAS_PENGGUNA)
+        X_p = np.nan_to_num(pengguna[[f"k{i}" for i in range(126)]].values)
+        y_p = pengguna["label"].values
+        grup_p = np.array([f"{h}_pengguna_{s}" for h, s in
+                           zip(pengguna["label"], pengguna["sesi"])], dtype=object)
+        X_mentah = np.vstack([X_mentah, X_p])
+        y = np.concatenate([y, y_p])
+        grup = np.concatenate([np.asarray(grup, dtype=object), grup_p])
+        bobot = np.concatenate([bobot, np.full(len(y_p), arg.bobot_pengguna)])
+        print(f"Data pengguna: {len(y_p)} frame dari {len(set(grup_p))} sesi "
+              f"({', '.join(f'{h} {n}' for h, n in zip(*np.unique(y_p, return_counts=True)))}), "
+              f"bobot {arg.bobot_pengguna:g}")
+
     X_baru = ambil_fitur(X_mentah)
     print(f"Fitur: {X_mentah.shape[1]} angka mentah -> {X_baru.shape[1]} angka siap pakai")
 
     judul("MENGUKUR FITUR LAMA (koordinat mentah)")
-    lama, f1_lama, _, _ = ukur(X_mentah, y, grup, "rata-rata")
+    lama, f1_lama, _, _ = ukur(X_mentah, y, grup, "rata-rata", bobot)
 
     judul("MENGUKUR FITUR BARU (dinormalkan + ukuran jari)")
-    baru, f1_baru, benar, total = ukur(X_baru, y, grup, "rata-rata")
+    baru, f1_baru, benar, total = ukur(X_baru, y, grup, "rata-rata", bobot)
 
     judul("PERBANDINGAN")
     print(f"  fitur lama : {lama * 100:6.2f}%   macro F1 {f1_lama * 100:6.2f}%")
@@ -114,7 +140,7 @@ def utama() -> int:
 
     judul("MELATIH MODEL AKHIR")
     print("  Kali ini memakai seluruh data, bukan dibagi-bagi lagi.")
-    model = buat_model().fit(X_baru, y)
+    model = buat_model().fit(X_baru, y, sample_weight=bobot)
     joblib.dump(model, arg.keluaran, compress=3)
     ukuran = arg.keluaran.stat().st_size / 1048576
     print(f"  Disimpan: {arg.keluaran.name} ({ukuran:.1f} MB)")
