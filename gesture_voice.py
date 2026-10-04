@@ -61,7 +61,7 @@ from pengukur import PengukurHuruf, StatistikSesi
 warnings.filterwarnings("ignore", message="X does not have valid feature names")
 warnings.filterwarnings("ignore", message=".*GetPrototype.*")
 
-PATH_MODEL = "rf_bisindo_v6.pkl"
+PATH_MODEL = "rf_bisindo_v7.pkl"
 
 # Warna dipakai OpenCV dengan urutan BGR (biru, hijau, merah), bukan RGB.
 ABU, HIJAU, BIRU, PUTIH, KUNING, GELAP = (

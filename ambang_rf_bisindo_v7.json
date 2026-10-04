@@ -1,22 +1,22 @@
 {
   "target_presisi": 80.0,
   "ambang": {
-    "A": 0.41,
+    "A": 0.2,
     "B": 0.2,
     "C": 0.2,
-    "D": 0.28,
-    "E": 0.2,
+    "D": 0.49,
+    "E": 0.5,
     "F": 0.2,
     "G": 0.2,
     "H": 0.2,
     "I": 0.2,
-    "J": 0.67,
+    "J": 0.66,
     "K": 0.2,
-    "L": 0.37,
+    "L": 0.2,
     "M": 0.2,
-    "N": 0.2,
+    "N": 0.68,
     "O": 0.2,
-    "P": 0.21,
+    "P": 0.39,
     "Q": 0.2,
     "R": 0.2,
     "S": 0.2,
@@ -26,7 +26,7 @@
     "W": 0.2,
     "X": 0.2,
     "Y": 0.2,
-    "Z": 0.4
+    "Z": 0.33
   },
   "keterangan": "Ambang untuk rf_bisindo_v7.pkl, dihitung latih_cabang.py dari tebakan per foto asli. 0.99 berarti ditolak."
 }

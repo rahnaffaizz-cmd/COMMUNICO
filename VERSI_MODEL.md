@@ -185,3 +185,17 @@ huruf dua tangan, v7 berpindah cabang dan bisa menjawab huruf satu tangan.
 
 Memuat v7 butuh `cabang.py` di folder yang sama.
 
+### v7 dilatih dengan rekaman sendiri, dan jadi model bawaan
+
+v7 kini dilatih bersama sesi `--ukur` milik pengguna untuk A sampai Z (5578
+frame, dimasukkan lewat `impor_ukur.py`, bobot 3). v7 punya berkas ambang
+sendiri, `ambang_rf_bisindo_v7.json`, yang dibuat `latih_cabang.py` dan dimuat
+otomatis oleh `gesture_voice.py` untuk model ini. Model lain tetap memakai
+`ambang_huruf.json`. Angka pada frame yang ikut melatih terlalu optimis; angka
+per foto asli: 84,1% pada sampel yang sesuai aturan (v6 72,6%).
+
+Kelemahan yang masih ada: kalau MediaPipe kehilangan satu tangan di tengah
+huruf dua tangan (H, K, P, X, Y paling sering), v7 pindah ke cabang satu
+tangan dan menjawab U, J, Z, atau L. Kembali ke v6 dengan
+`.un.ps1 --model rf_bisindo_v6.pkl`.
+
