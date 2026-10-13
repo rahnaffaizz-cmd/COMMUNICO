@@ -1,0 +1,13 @@
+# Butuh Python 3.11 atau 3.12.
+# MediaPipe belum menyediakan versi untuk Python 3.13 ke atas.
+mediapipe==0.10.14
+protobuf==4.25.3          # wajib versi ini, mediapipe 0.10.14 error di protobuf 4.25.4+
+opencv-python==4.10.0.84
+numpy==1.26.4
+scikit-learn==1.5.2
+joblib==1.4.2
+gTTS==2.5.4               # Google TTS, butuh internet saat pertama membuat suara
+pandas==2.2.3             # hanya dipakai evaluasi.py, program utama tidak butuh
+
+# Suaranya diputar lewat pemutar bawaan Windows (winmm) pakai ctypes,
+# jadi tidak perlu library audio tambahan.

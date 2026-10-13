@@ -1,0 +1,36 @@
+{
+  "target_presisi": 80.0,
+  "ambang": {
+    "A": 0.3,
+    "B": 0.99,
+    "C": 0.51,
+    "D": 0.99,
+    "E": 0.99,
+    "F": 0.2,
+    "G": 0.2,
+    "H": 0.2,
+    "I": 0.3,
+    "J": 0.28,
+    "K": 0.2,
+    "L": 0.28,
+    "M": 0.99,
+    "N": 0.99,
+    "O": 0.2,
+    "P": 0.26,
+    "Q": 0.59,
+    "R": 0.2,
+    "S": 0.2,
+    "T": 0.23,
+    "U": 0.25,
+    "V": 0.2,
+    "W": 0.3,
+    "X": 0.2,
+    "Y": 0.6,
+    "Z": 0.2
+  },
+  "keterangan": "Ambang keyakinan per huruf, dibuat oleh diagnosa.py. Nilai 0.99 berarti huruf itu ditolak.",
+  "catatan_penyetelan": {
+    "I": "Disetel manual 2026-09-13 berdasarkan pemakaian nyata dengan kamera pengguna, bukan dari dataset. Terbaca 0.40 dengan pesaing U 0.19, dan J tidak muncul sama sekali. Di dataset Kaggle huruf I selalu kalah oleh J, tapi itu ternyata tidak terjadi di kondisi nyata.",
+    "A": "Disetel 2026-09-13 dari dua sesi uji nyata. Ambang 0.79 lalu 0.42 sama-sama membuat A tidak pernah lolos, karena keyakinan A ternyata tidak stabil antar sesi: maks 0.50 di sesi pertama tapi cuma 0.40 di sesi kedua. Pada 0.30, pemutaran ulang sesi uji huruf A menghasilkan 15 huruf A benar, dibandingkan 0 benar dan 4 salah pada ambang 0.42. Model sebenarnya mengenali A di 75 persen frame, hanya keyakinannya saja yang rendah."
+  }
+}
