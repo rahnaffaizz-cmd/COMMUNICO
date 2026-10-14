@@ -5,17 +5,40 @@
 ![Lisensi](https://img.shields.io/badge/Lisensi-MIT-blue)
 
 Program yang membaca huruf **BISINDO** (Bahasa Isyarat Indonesia) lewat kamera,
-lalu langsung membacakan hasilnya dengan suara.
+membacakan hasilnya dengan suara, dan menjadi jembatan percakapan dua arah antara
+penyandang tuli dan lawan bicara yang tidak tuli.
 
 ```
 kamera ──▶ MediaPipe cari titik tangan ──▶ 126 angka koordinat
-       ──▶ model Random Forest menebak huruf (rf_bisindo_99.pkl)
+       ──▶ model dua cabang menebak huruf A-Z (satu tangan / dua tangan)
        ──▶ disaring lewat voting ──▶ huruf ditumpuk jadi kata
        ──▶ dibunyikan pakai Google TTS (bahasa Indonesia)
+
+mikrofon ──▶ Whisper bahasa Indonesia (CPU saja) ──▶ teks di percakapan
 ```
 
 Dibuat untuk membantu komunikasi sehari-hari yang singkat: mengeja nama, nama
 jalan, atau nama obat, ketika juru bahasa isyarat tidak tersedia.
+
+## Yang bisa dilakukan sekarang
+
+- **Membaca huruf A sampai Z** lewat kamera, baik huruf satu tangan maupun dua
+  tangan. Model `rf_bisindo_v7.pkl` punya dua cabang: kalau satu tangan terlihat
+  hanya C, E, I, J, L, O, R, U, V, Z yang bisa dijawab, kalau dua tangan terlihat
+  hanya 16 huruf sisanya. Diukur per foto asli pada dataset publik, pada sampel
+  yang mengikuti aturan itu, ketepatannya 86,4% (model satu cabang sebelumnya
+  71,2%). Lihat `VERSI_MODEL.md`.
+- **Percakapan dua sisi** (`.\run.ps1 -Percakapan`): kiri untuk Bahasa Isyarat
+  (kamera dan teks hasil bacaan), kanan untuk lawan bicara yang mengetik **atau
+  berbicara**. Tiap baris diberi tanda siapa yang bicara.
+- **Suara ke teks bahasa Indonesia** yang jalan di CPU saja, tanpa kartu grafis
+  (WER 13,9% pada ucapan bacaan nyata, lihat bagian percakapan di bawah).
+- **Disetel dengan tangan dan kamera Anda sendiri**: peragakan satu huruf dengan
+  `--ukur`, masukkan hasilnya jadi data latih dengan `impor_ukur.py`, lalu latih
+  ulang dengan `latih_cabang.py`.
+- **Tahan terhadap hal-hal yang biasa mengganggu**: urutan tangan dari MediaPipe
+  yang berubah-ubah (tangan disusun kiri ke kanan dulu), satu tangan yang hilang
+  sesaat dari deteksi, dan suara pembacaan yang tertangkap mikrofon.
 
 ---
 
@@ -24,8 +47,16 @@ jalan, atau nama obat, ketika juru bahasa isyarat tidak tersedia.
 | File | Gunanya |
 |---|---|
 | `gesture_voice.py` | program utama, pakai kamera |
-| `percakapan.py` | percakapan dua sisi: isyarat di kiri, lawan bicara mengetik di kanan |
+| `percakapan.py` | percakapan dua sisi: isyarat di kiri, lawan bicara mengetik atau berbicara di kanan |
+| `suara_ke_teks.py` | suara ke teks bahasa Indonesia (Whisper di CPU), dipakai `percakapan.py` |
+| `siapkan_model_suara.py` | menyiapkan model suara bahasa Indonesia, sekali per komputer |
 | `uji_gambar.py` | uji model pakai file gambar, tanpa kamera |
+| `cabang.py` | model dua cabang (satu tangan / dua tangan) yang dipakai v7 |
+| `latih_cabang.py` | melatih model dua cabang dan menulis ambang hurufnya |
+| `rekam.py` | merekam peragaan huruf Anda sendiri sebagai data latih |
+| `impor_ukur.py` | mengubah hasil `--ukur` jadi data latih berlabel |
+| `lihat_huruf.py` | menggambar bentuk tangan tiap huruf dari dataset |
+| `pengukur.py` | mengukur seberapa baik satu huruf terbaca (`--ukur`) |
 | `fitur.py` | mengubah titik tangan jadi angka yang dipelajari model |
 | `catatan.py` | mencatat jalannya program di tiap tahap |
 | `diagnosa.py` | memeriksa tiap huruf dan mencari ambang keyakinan terbaiknya |
@@ -35,8 +66,10 @@ jalan, atau nama obat, ketika juru bahasa isyarat tidak tersedia.
 | `putar_ulang.py` | bandingkan beberapa model pada rekaman sesi yang sama |
 | `latih.py` | melatih ulang model dan membandingkannya dengan yang lama |
 | `evaluasi.py` | ukur ketepatan model secara jujur, jadi tolok ukur perbaikan |
-| `rf_bisindo_v2.pkl` | **model yang dipakai sekarang** (10 MB) |
-| `rf_bisindo_99.pkl` | model lama, disimpan untuk pembanding (30 MB) |
+| `rf_bisindo_v7.pkl` | **model yang dipakai sekarang**, dua cabang (7 MB) |
+| `ambang_rf_bisindo_v7.json` | ambang keyakinan per huruf khusus v7, dipakai otomatis |
+| `rf_bisindo_v2.pkl` ... `v6` | versi sebelumnya, disimpan untuk pembanding (lihat `VERSI_MODEL.md`) |
+| `rf_bisindo_99.pkl` | model paling awal, disimpan untuk pembanding (30 MB) |
 | `contoh/` | 4 foto isyarat untuk bahan uji coba |
 | `run.ps1` / `run.bat` | tinggal dijalankan, tidak perlu ketik path Python |
 | `setup.ps1` | pemasangan otomatis di komputer baru |
@@ -180,6 +213,14 @@ lalu `.venv` di folder induk, terakhir `python` yang ada di PATH.
 
 ## Ambang keyakinan yang berbeda tiap huruf
 
+> **Catatan.** Angka dan tabel di bagian ini berasal dari model lama (v2) dan
+> `ambang_huruf.json`; bagian ini dibiarkan sebagai catatan bagaimana cara
+> kerjanya. Model bawaan sekarang (v7) punya ambang sendiri di
+> `ambang_rf_bisindo_v7.json`, dihitung `latih_cabang.py` dari tebakan yang
+> belum pernah dilihat modelnya, dan **tidak ada huruf yang ditolak**. Program
+> memilih berkas ambang yang cocok dengan modelnya, dan memuat ulang saat model
+> diganti.
+
 Ambang tunggal untuk semua huruf itu kasar, karena perilaku tiap huruf jauh
 berbeda. `diagnosa.py` memeriksanya satu per satu, lalu menulis ambang yang pas
 ke `ambang_huruf.json` yang dipakai program secara otomatis.
@@ -248,7 +289,7 @@ berkas di folder `log/`. Tanpa ini, kalau hurufnya salah kita cuma tahu
 Tampilan biasa hanya menampilkan kejadian penting:
 
 ```
-10:30:21 [MULAI   ] model rf_bisindo_v2.pkl, butuh 162 angka masukan
+10:30:21 [MULAI   ] model rf_bisindo_v7.pkl, butuh 197 angka masukan
 10:30:21 [HURUF   ] 'I' diterima  ->  teks sekarang: "I"
 10:30:21 [HURUF   ] 'T' diterima  ->  teks sekarang: "IT"
 10:30:21 [HURUF   ] 'U' diterima  ->  teks sekarang: "ITU"
