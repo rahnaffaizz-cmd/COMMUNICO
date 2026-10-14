@@ -117,6 +117,21 @@ Riwayatnya disimpan di `log/percakapan_<waktu>.txt`. Semua pilihan
 `gesture_voice.py` yang menyangkut pembacaan huruf (`--model`, `--kamera`,
 `--min-keyakinan`, dan seterusnya) berlaku juga di sini.
 
+**Lawan bicara bisa berbicara, bukan mengetik.** Di kanan atas ada pilihan
+*masukan*: **Ketik** atau **Suara** (tombol F7). Pada mode Suara, ucapan lewat
+mikrofon diubah jadi teks dan muncul sebagai satu pesan, sama seperti ketikan,
+dengan tanda "(suara)" di namanya. Pengenalnya model Whisper (`faster-whisper`)
+yang jalan di **CPU saja**, tanpa kartu grafis. Modelnya diunduh sekali, sekitar
+145 MB, saat mode suara pertama dinyalakan; sesudah itu tidak butuh internet.
+Selama suara hasil pembacaan isyarat sedang berbunyi, mikrofon diabaikan supaya
+tidak terbaca ulang.
+
+```powershell
+.\run.ps1 -Percakapan --mulai-dengan-suara     # langsung mode suara
+.\run.ps1 -Percakapan --model-ucapan small     # lebih teliti, sekitar 2,5x lebih lambat
+.\run.ps1 -Percakapan --mikrofon 1             # pilih mikrofon lain
+```
+
 Untuk mencoba tanpa menyalakan kamera, pakai gambar di folder `contoh/`:
 
 ```powershell

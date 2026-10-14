@@ -11,3 +11,10 @@ pandas==2.2.3             # hanya dipakai evaluasi.py, program utama tidak butuh
 
 # Suaranya diputar lewat pemutar bawaan Windows (winmm) pakai ctypes,
 # jadi tidak perlu library audio tambahan.
+
+# Suara ke teks untuk percakapan.py (mode suara), jalan di CPU saja.
+# Modelnya (base, sekitar 145 MB) diunduh sekali saat mode suara pertama dinyalakan.
+faster-whisper==1.2.1
+av==18.1.0                # av 19 tidak cocok dengan faster-whisper 1.2.1
+sounddevice==0.5.6        # membaca mikrofon
+click==8.1.8              # gTTS butuh click di bawah 8.2; dikunci supaya tidak naik

@@ -5,8 +5,9 @@ Jendelanya dibagi dua, berdampingan:
     KIRI   penyandang tuli. Video kamera, dan di bawahnya teks hasil
            pembacaan isyarat (huruf yang sedang disusun, lalu riwayat
            percakapan).
-    KANAN  lawan bicara yang tidak tuli. Mengetik pesan, dan riwayat
-           percakapan ditulis di atasnya.
+    KANAN  lawan bicara yang tidak tuli. Riwayat percakapan, dan di bawahnya
+           pilihan memasukkan pesan: KETIK, atau SUARA lewat mikrofon yang
+           diubah jadi teks (suara_ke_teks.py, jalan di CPU saja).
 
 Tiap baris percakapan diberi tanda siapa yang bicara: warna biru dan rata kiri
 untuk penyandang tuli, hijau dan rata kanan untuk lawan bicara, lengkap dengan
@@ -17,6 +18,8 @@ Cara pakai:
     python percakapan.py
     python percakapan.py --kamera 1 --model rf_bisindo_v7.pkl
     python percakapan.py --tanpa-suara        # pesan isyarat tidak diucapkan
+    python percakapan.py --mulai-dengan-suara # lawan bicara langsung berbicara
+    python percakapan.py --model-ucapan small # pengenal suara lebih teliti, lebih lambat
 
 Tombol (selain tombol di layar):
     ENTER di kotak ketik   kirim pesan lawan bicara
@@ -25,12 +28,18 @@ Tombol (selain tombol di layar):
     F4   kosongkan teks isyarat
     F5   tambah spasi pada teks isyarat
     F6   suara menyala / mati
+    F7   lawan bicara berganti antara ketik dan suara
 
 Pesan isyarat terkirim sendiri kalau tidak ada huruf baru selama --ucap-setelah
 detik (bawaan 2,5). Pembacaan hurufnya memakai bagian yang sama dengan
 gesture_voice.py: voting, ambang per huruf, dan tangan hilang sesaat.
 
 Riwayat percakapan juga disimpan ke log/percakapan_<waktu>.txt.
+
+Mode SUARA: ucapan lawan bicara dikenali lalu muncul sebagai satu pesan, sama
+seperti ketikan, dengan tanda "(suara)" di namanya. Model dimuat dan diunduh
+saat mode suara pertama kali dinyalakan. Selama suara hasil pembacaan isyarat
+sedang berbunyi, mikrofon diabaikan supaya tidak terbaca ulang.
 """
 
 from __future__ import annotations
@@ -74,6 +83,7 @@ class Pesan:
     pembicara: str          # "tuli" atau "dengar"
     teks: str
     waktu: datetime
+    via: str = ""           # "suara" kalau berasal dari mikrofon, kosong kalau diketik
 
 
 class Riwayat:
@@ -86,12 +96,13 @@ class Riwayat:
             FOLDER_LOG.mkdir(exist_ok=True)
             self._berkas = FOLDER_LOG / f"percakapan_{datetime.now():%Y%m%d_%H%M%S}.txt"
 
-    def tambah(self, pembicara: str, teks: str) -> Pesan:
-        baru = Pesan(pembicara, teks, datetime.now())
+    def tambah(self, pembicara: str, teks: str, via: str = "") -> Pesan:
+        baru = Pesan(pembicara, teks, datetime.now(), via)
         self.pesan.append(baru)
         if self._berkas:
+            tanda = f"({via}) " if via else ""
             with open(self._berkas, "a", encoding="utf-8") as f:
-                f.write(f"[{baru.waktu:%H:%M:%S}] {pembicara.upper():7s}: {teks}\n")
+                f.write(f"[{baru.waktu:%H:%M:%S}] {pembicara.upper():7s}: {tanda}{teks}\n")
         return baru
 
 
@@ -312,7 +323,8 @@ class PanelObrolan(tk.Text):
     def tambah(self, pesan: Pesan) -> None:
         siapa = pesan.pembicara
         self.configure(state="normal")
-        self.insert("end", f"{NAMA[siapa]}  {pesan.waktu:%H:%M:%S}\n", f"{siapa}_nama")
+        tanda = f" ({pesan.via})" if pesan.via else ""
+        self.insert("end", f"{NAMA[siapa]}{tanda}  {pesan.waktu:%H:%M:%S}\n", f"{siapa}_nama")
         self.insert("end", f" {pesan.teks} \n", f"{siapa}_isi")
         self.configure(state="disabled")
         self.see("end")
@@ -320,9 +332,11 @@ class PanelObrolan(tk.Text):
 
 class Aplikasi:
     def __init__(self, akar: tk.Tk, pekerja: PekerjaKamera, pengucap, riwayat: Riwayat,
-                 catat, *, suara: bool):
+                 catat, *, suara: bool, pendengar=None):
         self.akar = akar
         self.pekerja = pekerja
+        self.pendengar = pendengar            # PendengarSuara, kosong kalau tidak dipakai
+        self.mode = tk.StringVar(value="ketik")
         self.pengucap = pengucap
         self.riwayat = riwayat
         self.catat = catat
@@ -411,35 +425,84 @@ class Aplikasi:
         kanan.columnconfigure(0, weight=1)
         kanan.rowconfigure(1, weight=1)
 
-        tk.Label(kanan, text="LAWAN BICARA  -  mengetik", anchor="w",
-                 font=("Segoe UI", 12, "bold"), fg=WARNA_NAMA["dengar"],
-                 bg="#eceff1").grid(row=0, column=0, sticky="ew")
+        atas = tk.Frame(kanan, bg="#eceff1")
+        atas.grid(row=0, column=0, sticky="ew")
+        tk.Label(atas, text="LAWAN BICARA", anchor="w", font=("Segoe UI", 12, "bold"),
+                 fg=WARNA_NAMA["dengar"], bg="#eceff1").pack(side="left")
+        # Pilihan cara memasukkan pesan.
+        ttk.Radiobutton(atas, text="Suara (F7)", value="suara", variable=self.mode,
+                        command=self._ganti_mode).pack(side="right")
+        ttk.Radiobutton(atas, text="Ketik (F7)", value="ketik", variable=self.mode,
+                        command=self._ganti_mode).pack(side="right", padx=(0, 10))
+        tk.Label(atas, text="masukan:", bg="#eceff1", fg="#546e7a",
+                 font=("Segoe UI", 9)).pack(side="right", padx=(0, 8))
 
         self.obrolan_kanan = PanelObrolan(kanan, ukuran_font=16)
         self.obrolan_kanan.grid(row=1, column=0, sticky="nsew", pady=(4, 8))
 
-        bawah = tk.Frame(kanan, bg="#eceff1")
-        bawah.grid(row=2, column=0, sticky="ew")
-        bawah.columnconfigure(0, weight=1)
-        self.ketik = tk.Entry(bawah, font=("Segoe UI", 16), relief="solid", bd=1)
+        # Dua tampilan di tempat yang sama: kotak ketik, atau penunjuk suara.
+        self.ruang_masukan = tk.Frame(kanan, bg="#eceff1")
+        self.ruang_masukan.grid(row=2, column=0, sticky="ew")
+        self.ruang_masukan.columnconfigure(0, weight=1)
+
+        self.bawah_ketik = tk.Frame(self.ruang_masukan, bg="#eceff1")
+        self.bawah_ketik.grid(row=0, column=0, sticky="ew")
+        self.bawah_ketik.columnconfigure(0, weight=1)
+        self.ketik = tk.Entry(self.bawah_ketik, font=("Segoe UI", 16), relief="solid", bd=1)
         self.ketik.grid(row=0, column=0, sticky="ew", ipady=7)
         self.ketik.bind("<Return>", lambda _e: self.kirim_ketikan())
-        ttk.Button(bawah, text="Kirim", command=self.kirim_ketikan
+        ttk.Button(self.bawah_ketik, text="Kirim", command=self.kirim_ketikan
                    ).grid(row=0, column=1, padx=(8, 0), ipady=4)
-        tk.Label(kanan, text="Ketik pesan lalu tekan Enter. Pesan muncul juga di sisi kiri.",
-                 anchor="w", bg="#eceff1", fg="#78909c", font=("Segoe UI", 9)
-                 ).grid(row=3, column=0, sticky="ew", pady=(4, 0))
+
+        self.bawah_suara = tk.Frame(self.ruang_masukan, bg="white", relief="solid", bd=1)
+        self.bawah_suara.grid(row=0, column=0, sticky="ew")
+        self.bawah_suara.columnconfigure(0, weight=1)
+        self.status_suara = tk.Label(self.bawah_suara, text="", anchor="w", bg="white",
+                                     fg="#1b5e20", font=("Segoe UI", 15, "bold"),
+                                     padx=10, pady=8)
+        self.status_suara.grid(row=0, column=0, sticky="ew")
+        self.tingkat_suara = ttk.Progressbar(self.bawah_suara, maximum=1.0, length=140)
+        self.tingkat_suara.grid(row=0, column=1, padx=10)
+        self.bawah_suara.grid_remove()
+
+        self.petunjuk = tk.Label(kanan, anchor="w", bg="#eceff1", fg="#78909c",
+                                 font=("Segoe UI", 9))
+        self.petunjuk.grid(row=3, column=0, sticky="ew", pady=(4, 0))
+        self._ganti_mode()
+
+    def _ganti_mode(self) -> None:
+        if self.mode.get() == "suara":
+            if self.pendengar is None:
+                self.mode.set("ketik")
+                self.catat.kabar("SUARA", "pengenal suara tidak tersedia")
+            else:
+                self.bawah_ketik.grid_remove()
+                self.bawah_suara.grid()
+                self.status_suara.configure(text="Menyiapkan mikrofon...", fg="#1b5e20")
+                self.pendengar.aktif.set()
+                self.petunjuk.configure(text="Bicara dengan jelas, lalu jeda sebentar untuk mengirim.")
+                self.catat.kabar("SUARA", "masukan lawan bicara: suara")
+                return
+        if self.pendengar is not None:
+            self.pendengar.aktif.clear()
+        self.bawah_suara.grid_remove()
+        self.bawah_ketik.grid()
         self.ketik.focus_set()
+        self.petunjuk.configure(text="Ketik pesan lalu tekan Enter. Pesan muncul juga "
+                                     "di sisi kiri.")
 
     def _pasang_tombol(self) -> None:
         for tombol, perintah in (("<F2>", "kirim"), ("<F3>", "hapus"),
                                  ("<F4>", "kosong"), ("<F5>", "spasi")):
             self.akar.bind(tombol, lambda _e, p=perintah: self.pekerja.perintah.put(p))
         self.akar.bind("<F6>", lambda _e: self.suara.set(not self.suara.get()))
+        self.akar.bind("<F7>", lambda _e: (
+            self.mode.set("ketik" if self.mode.get() == "suara" else "suara"),
+            self._ganti_mode()))
 
     # ---- pesan
-    def tambah_pesan(self, pembicara: str, teks: str) -> None:
-        pesan = self.riwayat.tambah(pembicara, teks)
+    def tambah_pesan(self, pembicara: str, teks: str, via: str = "") -> None:
+        pesan = self.riwayat.tambah(pembicara, teks, via)
         self.obrolan_kiri.tambah(pesan)
         self.obrolan_kanan.tambah(pesan)
         self.catat.kabar("PESAN", f"{pembicara}: {teks}")
@@ -451,6 +514,35 @@ class Aplikasi:
         if teks:
             self.tambah_pesan("dengar", teks)
             self.ketik.delete(0, "end")
+
+    def sedang_menyuarakan(self) -> bool:
+        """Benar kalau ada suara yang sedang atau akan diputar lewat pengeras suara.
+
+        Dipakai pendengar untuk mengabaikan mikrofon, supaya suara hasil
+        pembacaan isyarat tidak terbaca ulang sebagai ucapan lawan bicara.
+        """
+        return self.pengucap.sibuk or bool(self._antri_suara)
+
+    def _urus_suara_masuk(self) -> None:
+        """Ambil kabar dari pendengar suara: status, kerasnya suara, dan teks."""
+        if self.pendengar is None:
+            return
+        try:
+            while True:
+                jenis, isi = self.pendengar.keluar.get_nowait()
+                if jenis == "teks":
+                    self.tambah_pesan("dengar", isi, via="suara")
+                elif jenis == "tingkat":
+                    self.tingkat_suara.configure(value=isi)
+                elif jenis == "status" and self.mode.get() == "suara":
+                    self.status_suara.configure(text=isi, fg="#1b5e20")
+                elif jenis == "galat":
+                    self.catat.kabar("SUARA", f"gagal: {isi}")
+                    self.mode.set("ketik")
+                    self._ganti_mode()
+                    messagebox.showerror("Suara ke teks gagal", isi)
+        except queue.Empty:
+            pass
 
     def _ucapkan_antrian(self) -> None:
         # Pengucap membuang permintaan kalau masih bicara, jadi pesan yang
@@ -479,6 +571,7 @@ class Aplikasi:
         if terakhir is not None:
             self._gambar(terakhir["gambar"], terakhir["status"])
         self._ucapkan_antrian()
+        self._urus_suara_masuk()
         self.akar.after(15, self.putar)
 
     def _gambar(self, ppm: bytes | None, status: dict | None) -> None:
@@ -504,6 +597,9 @@ class Aplikasi:
 
     def tutup(self) -> None:
         self.pekerja.berhenti.set()
+        if self.pendengar is not None:
+            self.pendengar.aktif.clear()
+            self.pendengar.berhenti.set()
         self.akar.destroy()
 
 
@@ -534,6 +630,15 @@ def baca_argumen(argv=None) -> argparse.Namespace:
     p.add_argument("--keyakinan-tracking", type=float, default=0.5)
     p.add_argument("--ambang-seragam", action="store_true",
                    help="abaikan ambang per huruf, pakai --min-keyakinan untuk semua")
+    p.add_argument("--model-ucapan", default="base",
+                   help="ukuran model pengenal suara (CPU, int8): tiny, base, small, "
+                        "medium. Makin besar makin teliti dan makin lambat (bawaan base)")
+    p.add_argument("--mikrofon", default=None,
+                   help="nomor atau nama perangkat mikrofon (bawaan: yang aktif di Windows)")
+    p.add_argument("--thread-suara", type=int, default=4,
+                   help="jumlah thread CPU untuk pengenal suara (bawaan 4)")
+    p.add_argument("--mulai-dengan-suara", action="store_true",
+                   help="lawan bicara langsung dalam mode suara, bukan ketik")
     p.add_argument("--tanpa-catatan", action="store_true",
                    help="jangan simpan log sesi dan riwayat percakapan")
     return p.parse_args(argv)
@@ -585,17 +690,35 @@ def utama() -> int:
 
     pengucap = gv.Pengucap(bahasa=arg.bahasa, pelan=arg.pelan, catat=catat)
     riwayat = Riwayat(simpan=not arg.tanpa_catatan)
+
+    # Pengenal suara tidak memuat apa-apa sampai mode suara pertama kali dinyalakan.
+    from suara_ke_teks import Mikrofon, PendengarSuara, PengenalSuara
+
+    perangkat = arg.mikrofon
+    if perangkat is not None and perangkat.isdigit():
+        perangkat = int(perangkat)
+    pendengar = PendengarSuara(
+        PengenalSuara(arg.model_ucapan, arg.bahasa, arg.thread_suara),
+        buka_mikrofon=lambda: Mikrofon(perangkat),
+        sedang_bicara=lambda: aplikasi.sedang_menyuarakan())
     pekerja = PekerjaKamera(kamera, pendeteksi, penyusun, gambar_titik=gambar_titik)
 
     akar = tk.Tk()
-    aplikasi = Aplikasi(akar, pekerja, pengucap, riwayat, catat, suara=not arg.tanpa_suara)
+    aplikasi = Aplikasi(akar, pekerja, pengucap, riwayat, catat,
+                        suara=not arg.tanpa_suara, pendengar=pendengar)
     pekerja.start()
+    pendengar.start()
+    if arg.mulai_dengan_suara:
+        aplikasi.mode.set("suara")
+        aplikasi._ganti_mode()
     akar.after(15, aplikasi.putar)
     waktu_mulai = time.monotonic()
     try:
         akar.mainloop()
     finally:
         pekerja.berhenti.set()
+        pendengar.aktif.clear()
+        pendengar.berhenti.set()
         pekerja.join(timeout=2.0)
         catat.selesai(penyusun.teks, 0, time.monotonic() - waktu_mulai)
         pengucap.tutup()
