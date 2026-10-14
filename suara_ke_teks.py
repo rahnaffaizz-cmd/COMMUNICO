@@ -29,6 +29,7 @@ DUA HAL YANG SENGAJA DIJAGA
 from __future__ import annotations
 
 import queue
+import sys
 import threading
 import time
 from collections import deque
@@ -138,7 +139,17 @@ class PengenalSuara:
 
     def muat(self) -> None:
         if self._model is None:
-            from faster_whisper import WhisperModel
+            try:
+                from faster_whisper import WhisperModel
+            except ModuleNotFoundError as e:
+                # Program bisa jalan dengan Python yang berbeda dari tempat paket
+                # dipasang (ada .venv di folder ini dan di folder induk), jadi
+                # pesannya menyebut Python mana yang sedang dipakai.
+                raise RuntimeError(
+                    f"Paket '{e.name}' belum terpasang di Python yang sedang dipakai:\n"
+                    f"{sys.executable}\n\nPasang dengan:\n"
+                    f'uv pip install --python "{sys.executable}" -r requirements.txt'
+                ) from e
 
             # device="cpu" dan int8: tidak butuh kartu grafis, dan memori kecil.
             self._model = WhisperModel(self.ukuran, device="cpu", compute_type="int8",
