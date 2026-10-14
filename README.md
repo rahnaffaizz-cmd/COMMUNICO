@@ -523,6 +523,10 @@ perbaikan nyata — seberapa pun bagusnya angka yang keluar dari pembagian acak.
 
 ## Ucapan terima kasih
 
+- **Abravia Mouzahra Ramadhani** dan **Shabri Sebastian Siregar** (SMK Telkom Malang)
+  — proyek [gestura-bisindo](https://github.com/ShabriSebastian/gestura-bisindo) (MIT),
+  sistem pengenalan BISINDO real-time dengan MediaPipe, TensorFlow, dan aplikasi
+  Android. Gesture Voice dikembangkan di dalam proyek induk ini.
 - **Krisna Santosa** — model `rf_bisindo_99.pkl` dan foto contoh, dari proyek
   [realtime-bisindo-classification](https://github.com/KrisnaSantosa15/realtime-bisindo-classification) (MIT).
 - **Google MediaPipe** — pendeteksi titik tangan.
