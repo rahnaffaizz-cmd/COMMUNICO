@@ -38,3 +38,6 @@ log/
 
 # Gambar bentuk huruf, dibuat ulang dengan lihat_huruf.py.
 bentuk/
+
+# Model suara bahasa Indonesia, disiapkan siapkan_model_suara.py (ratusan MB).
+model_suara/

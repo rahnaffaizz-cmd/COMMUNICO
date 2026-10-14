@@ -121,14 +121,38 @@ Riwayatnya disimpan di `log/percakapan_<waktu>.txt`. Semua pilihan
 *masukan*: **Ketik** atau **Suara** (tombol F7). Pada mode Suara, ucapan lewat
 mikrofon diubah jadi teks dan muncul sebagai satu pesan, sama seperti ketikan,
 dengan tanda "(suara)" di namanya. Pengenalnya model Whisper (`faster-whisper`)
-yang jalan di **CPU saja**, tanpa kartu grafis. Modelnya diunduh sekali, sekitar
-145 MB, saat mode suara pertama dinyalakan; sesudah itu tidak butuh internet.
-Selama suara hasil pembacaan isyarat sedang berbunyi, mikrofon diabaikan supaya
-tidak terbaca ulang.
+yang jalan di **CPU saja**, tanpa kartu grafis. Selama suara hasil pembacaan
+isyarat sedang berbunyi, mikrofon diabaikan supaya tidak terbaca ulang.
+
+**Dioptimalkan untuk bahasa Indonesia.** Whisper bawaan lemah di bahasa
+Indonesia, jadi dipakai Whisper yang disetel khusus untuk bahasa Indonesia
+(`id-base`, dari maleo-ai, lisensi Apache-2.0). Tingkat kesalahan kata (WER),
+diukur pada 64 ucapan manusia nyata dari FLEURS bahasa Indonesia, panjang sampai
+15 detik:
+
+| Model | WER | Waktu per ucapan (sekitar 5 detik) |
+|---|---|---|
+| Whisper `base` biasa (sebelumnya) | 45,6% | 0,9 detik |
+| Whisper `small` biasa | 19,2% | sekitar 3 detik |
+| **`id-base`** (bawaan, beam 5) | **13,9%** | **1,1 detik** |
+| `id-small` | 10,8% | sekitar 3 detik |
+
+Ini ucapan bacaan yang cukup bersih. Percakapan spontan, derau ruangan, dan
+mikrofon laptop akan menghasilkan angka yang lebih buruk.
+
+Modelnya disiapkan **sekali** (diunduh atau dikonversi, sekitar 2 menit, butuh
+`uv` dan internet), otomatis saat mode suara pertama dinyalakan, atau lewat:
+
+```powershell
+.\.venv\Scripts\python.exe siapkan_model_suara.py            # id-base
+.\.venv\Scripts\python.exe siapkan_model_suara.py --semua     # termasuk id-small
+```
+
+Hasilnya di folder `model_suara/` dan tidak ikut ke GitHub.
 
 ```powershell
 .\run.ps1 -Percakapan --mulai-dengan-suara     # langsung mode suara
-.\run.ps1 -Percakapan --model-ucapan small     # lebih teliti, sekitar 2,5x lebih lambat
+.\run.ps1 -Percakapan --model-ucapan id-small   # paling teliti, sekitar 3x lebih lambat
 .\run.ps1 -Percakapan --mikrofon 1             # pilih mikrofon lain
 ```
 

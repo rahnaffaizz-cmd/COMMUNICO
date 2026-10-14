@@ -19,7 +19,7 @@ Cara pakai:
     python percakapan.py --kamera 1 --model rf_bisindo_v7.pkl
     python percakapan.py --tanpa-suara        # pesan isyarat tidak diucapkan
     python percakapan.py --mulai-dengan-suara # lawan bicara langsung berbicara
-    python percakapan.py --model-ucapan small # pengenal suara lebih teliti, lebih lambat
+    python percakapan.py --model-ucapan id-small   # pengenal suara lebih teliti, lebih lambat
 
 Tombol (selain tombol di layar):
     ENTER di kotak ketik   kirim pesan lawan bicara
@@ -630,9 +630,13 @@ def baca_argumen(argv=None) -> argparse.Namespace:
     p.add_argument("--keyakinan-tracking", type=float, default=0.5)
     p.add_argument("--ambang-seragam", action="store_true",
                    help="abaikan ambang per huruf, pakai --min-keyakinan untuk semua")
-    p.add_argument("--model-ucapan", default="base",
-                   help="ukuran model pengenal suara (CPU, int8): tiny, base, small, "
-                        "medium. Makin besar makin teliti dan makin lambat (bawaan base)")
+    p.add_argument("--model-ucapan", default="id-base",
+                   help="model pengenal suara (CPU, int8). id-base (bawaan) dan id-small "
+                        "disetel untuk bahasa Indonesia, lebih tepat daripada Whisper "
+                        "biasa. Untuk bahasa lain pakai tiny, base, small, atau medium")
+    p.add_argument("--beam-ucapan", type=int, default=5,
+                   help="lebar pencarian pengenal suara; makin besar makin teliti dan "
+                        "sedikit lebih lambat (bawaan 5)")
     p.add_argument("--mikrofon", default=None,
                    help="nomor atau nama perangkat mikrofon (bawaan: yang aktif di Windows)")
     p.add_argument("--thread-suara", type=int, default=4,
@@ -697,8 +701,13 @@ def utama() -> int:
     perangkat = arg.mikrofon
     if perangkat is not None and perangkat.isdigit():
         perangkat = int(perangkat)
+    model_ucapan = arg.model_ucapan
+    if model_ucapan.startswith("id-") and arg.bahasa != "id":
+        print(f"Catatan: {model_ucapan} khusus bahasa Indonesia, jadi untuk --bahasa "
+              f"{arg.bahasa} dipakai Whisper 'base'.")
+        model_ucapan = "base"
     pendengar = PendengarSuara(
-        PengenalSuara(arg.model_ucapan, arg.bahasa, arg.thread_suara),
+        PengenalSuara(model_ucapan, arg.bahasa, arg.thread_suara, arg.beam_ucapan),
         buka_mikrofon=lambda: Mikrofon(perangkat),
         sedang_bicara=lambda: aplikasi.sedang_menyuarakan())
     pekerja = PekerjaKamera(kamera, pendeteksi, penyusun, gambar_titik=gambar_titik)

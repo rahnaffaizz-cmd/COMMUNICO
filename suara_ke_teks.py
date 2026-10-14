@@ -127,10 +127,16 @@ class PemotongUcapan:
 class PengenalSuara:
     """Whisper di CPU. Modelnya baru dimuat saat pertama dibutuhkan."""
 
-    def __init__(self, ukuran: str = "base", bahasa: str = "id", jumlah_thread: int = 4):
+    def __init__(self, ukuran: str = "id-base", bahasa: str = "id", jumlah_thread: int = 4,
+                 beam: int = 5, lapor=None):
+        # ukuran: "id-base" atau "id-small" (disetel untuk bahasa Indonesia, lihat
+        # siapkan_model_suara.py), nama ukuran Whisper biasa (tiny, base, small,
+        # medium), atau jalur ke folder model CTranslate2.
         self.ukuran = ukuran
         self.bahasa = bahasa
         self.jumlah_thread = jumlah_thread
+        self.beam = beam
+        self.lapor = lapor or (lambda teks: None)      # untuk menampilkan kemajuan
         self._model = None
 
     @property
@@ -151,15 +157,21 @@ class PengenalSuara:
                     f'uv pip install --python "{sys.executable}" -r requirements.txt'
                 ) from e
 
+            from siapkan_model_suara import MODEL, siapkan
+
+            # Model bahasa Indonesia disiapkan (diunduh atau dikonversi) sekali.
+            sumber = str(siapkan(self.ukuran, self.lapor)) if self.ukuran in MODEL \
+                else self.ukuran
+            self.lapor(f"Memuat model suara '{self.ukuran}' ...")
             # device="cpu" dan int8: tidak butuh kartu grafis, dan memori kecil.
-            self._model = WhisperModel(self.ukuran, device="cpu", compute_type="int8",
+            self._model = WhisperModel(sumber, device="cpu", compute_type="int8",
                                        cpu_threads=self.jumlah_thread)
 
     def kenali(self, audio: np.ndarray) -> str:
         """Ubah satu ucapan jadi teks. Balik string kosong kalau tidak yakin."""
         self.muat()
         segmen, _ = self._model.transcribe(
-            audio.astype(np.float32), language=self.bahasa, beam_size=1,
+            audio.astype(np.float32), language=self.bahasa, beam_size=self.beam,
             condition_on_previous_text=False, temperature=0.0)
 
         bagian = []
@@ -170,7 +182,10 @@ class PengenalSuara:
             if s.avg_logprob < -1.6:
                 continue
             bagian.append(s.text.strip())
-        return " ".join(b for b in bagian if b).strip()
+        hasil = " ".join(b for b in bagian if b).strip()
+        # Model bahasa Indonesia mengeluarkan huruf kecil semua; huruf pertama
+        # dikapitalkan supaya pesan enak dibaca.
+        return hasil[:1].upper() + hasil[1:]
 
 
 # ------------------------------------------------------------------- mikrofon
@@ -258,8 +273,8 @@ class PendengarSuara(threading.Thread):
 
     def _dengarkan(self) -> None:
         if not self.pengenal.siap:
-            self._titip("status", f"Memuat model suara '{self.pengenal.ukuran}' "
-                                  f"(pertama kali mengunduh)...")
+            self._titip("status", f"Memuat model suara '{self.pengenal.ukuran}' ...")
+            self.pengenal.lapor = lambda teks: self._titip("status", teks)
             self.pengenal.muat()
 
         mik = self.buka_mikrofon()
