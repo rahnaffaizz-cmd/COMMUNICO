@@ -18,6 +18,10 @@
 #                                   dilaporkan seberapa baik huruf itu terbaca
 #                                   oleh kamera Anda sendiri
 #
+# Percakapan dua sisi: isyarat di kiri, lawan bicara mengetik di kanan
+#   .\run.ps1 -Percakapan           semua pilihan di atas ikut berlaku, misalnya
+#   .\run.ps1 -Percakapan --tanpa-suara
+#
 # Menguji tanpa kamera
 #   .\run.ps1 -Uji                  pakai gambar di folder contoh
 #   .\run.ps1 -Uji "C:\foto\saya"   pakai gambar di folder lain
@@ -25,6 +29,7 @@
 # Daftar lengkap:  .\run.ps1 -h
 param(
     [switch]$Uji,
+    [switch]$Percakapan,
     [Parameter(ValueFromRemainingArguments = $true)] $Args
 )
 
@@ -51,5 +56,5 @@ if (-not $py) {
     exit 1
 }
 
-$skrip = if ($Uji) { "uji_gambar.py" } else { "gesture_voice.py" }
+$skrip = if ($Uji) { "uji_gambar.py" } elseif ($Percakapan) { "percakapan.py" } else { "gesture_voice.py" }
 & $py $skrip @Args

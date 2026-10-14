@@ -50,7 +50,6 @@ from pathlib import Path
 
 import cv2
 import joblib
-import mediapipe as mp
 import numpy as np
 
 from catatan import Pencatat
@@ -630,6 +629,11 @@ def utama() -> int:
         print(f"GAGAL: kamera {arg.kamera} tidak bisa dibuka. "
               f"Coba --kamera 1, atau tutup aplikasi lain yang sedang memakai kamera.")
         return 1
+
+    # Diimpor di sini, bukan di atas berkas, karena memuat MediaPipe (dan
+    # TensorFlow di belakangnya) lambat. Dengan begini berkas lain bisa memakai
+    # Pengucap, VotingHuruf, dan lainnya tanpa menunggu itu.
+    import mediapipe as mp
 
     mp_tangan = mp.solutions.hands
     mp_gambar = mp.solutions.drawing_utils

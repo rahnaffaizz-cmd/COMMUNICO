@@ -24,6 +24,7 @@ jalan, atau nama obat, ketika juru bahasa isyarat tidak tersedia.
 | File | Gunanya |
 |---|---|
 | `gesture_voice.py` | program utama, pakai kamera |
+| `percakapan.py` | percakapan dua sisi: isyarat di kiri, lawan bicara mengetik di kanan |
 | `uji_gambar.py` | uji model pakai file gambar, tanpa kamera |
 | `fitur.py` | mengubah titik tangan jadi angka yang dipelajari model |
 | `catatan.py` | mencatat jalannya program di tiap tahap |
@@ -98,6 +99,23 @@ pemasangan ekstensi Python kalau belum ada.
 ```
 
 Atau klik dua kali file `run.bat`.
+
+### Percakapan dua sisi
+
+```powershell
+.\run.ps1 -Percakapan
+```
+
+Jendela dibagi dua. **Kiri** untuk penyandang tuli: video kamera, lalu di
+bawahnya huruf yang sedang disusun dari isyarat dan riwayat percakapan. **Kanan**
+untuk lawan bicara yang tidak tuli: riwayat percakapan, dan kotak untuk mengetik
+(Enter untuk kirim). Tiap baris diberi tanda siapa yang bicara: biru dan rata
+kiri untuk penyandang tuli, hijau dan rata kanan untuk lawan bicara, lengkap
+dengan jam. Pesan isyarat terkirim sendiri kalau tidak ada huruf baru selama
+2,5 detik, lalu diucapkan (matikan dengan `--tanpa-suara` atau tombol F6).
+Riwayatnya disimpan di `log/percakapan_<waktu>.txt`. Semua pilihan
+`gesture_voice.py` yang menyangkut pembacaan huruf (`--model`, `--kamera`,
+`--min-keyakinan`, dan seterusnya) berlaku juga di sini.
 
 Untuk mencoba tanpa menyalakan kamera, pakai gambar di folder `contoh/`:
 
