@@ -61,7 +61,7 @@ FOLDER_LOG = FOLDER / "log"
 LEBAR_VIDEO, TINGGI_VIDEO = 480, 360
 
 # Warna tiap pembicara. Dipakai di kedua sisi supaya konsisten.
-NAMA = {"tuli": "Penyandang tuli", "dengar": "Lawan bicara"}
+NAMA = {"tuli": "Bahasa Isyarat", "dengar": "Lawan bicara"}
 WARNA_NAMA = {"tuli": "#0d47a1", "dengar": "#1b5e20"}
 WARNA_LATAR = {"tuli": "#e3f2fd", "dengar": "#e8f5e9"}
 
@@ -354,7 +354,7 @@ class Aplikasi:
         kiri.columnconfigure(0, weight=1)
         kiri.rowconfigure(7, weight=1)
 
-        tk.Label(kiri, text="PENYANDANG TULI  -  isyarat", anchor="w",
+        tk.Label(kiri, text="BAHASA ISYARAT  -  kamera", anchor="w",
                  font=("Segoe UI", 12, "bold"), fg=WARNA_NAMA["tuli"],
                  bg="#eceff1").grid(row=0, column=0, sticky="ew")
 
