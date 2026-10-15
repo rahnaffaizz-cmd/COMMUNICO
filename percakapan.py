@@ -29,6 +29,7 @@ Tombol (selain tombol di layar):
     F5   tambah spasi pada teks isyarat
     F6   suara menyala / mati
     F7   lawan bicara berganti antara ketik dan suara
+    F8   bersihkan percakapan di layar (catatan di log/ tetap lengkap)
 
 Pesan isyarat terkirim sendiri kalau tidak ada huruf baru selama --ucap-setelah
 detik (bawaan 2,5). Pembacaan hurufnya memakai bagian yang sama dengan
@@ -104,6 +105,13 @@ class Riwayat:
             with open(self._berkas, "a", encoding="utf-8") as f:
                 f.write(f"[{baru.waktu:%H:%M:%S}] {pembicara.upper():7s}: {tanda}{teks}\n")
         return baru
+
+    def kosongkan_layar(self) -> None:
+        """Layar dibersihkan. Catatan di log/ tidak dihapus, hanya diberi penanda."""
+        self.pesan.clear()
+        if self._berkas:
+            with open(self._berkas, "a", encoding="utf-8") as f:
+                f.write(f"[{datetime.now():%H:%M:%S}] ------- layar dibersihkan -------\n")
 
 
 # --------------------------------------------------- dari isyarat jadi teks
@@ -329,6 +337,11 @@ class PanelObrolan(tk.Text):
         self.configure(state="disabled")
         self.see("end")
 
+    def kosongkan(self) -> None:
+        self.configure(state="normal")
+        self.delete("1.0", "end")
+        self.configure(state="disabled")
+
 
 class Aplikasi:
     def __init__(self, akar: tk.Tk, pekerja: PekerjaKamera, pengucap, riwayat: Riwayat,
@@ -403,6 +416,8 @@ class Aplikasi:
         self.hitung.pack(side="left", padx=6)
         ttk.Checkbutton(waktu, text="Suara (F6)", variable=self.suara
                         ).pack(side="right")
+        ttk.Button(waktu, text="Bersihkan F8",
+                   command=self.bersihkan_percakapan).pack(side="right", padx=(0, 10))
 
         tombol = tk.Frame(kiri, bg="#eceff1")
         tombol.grid(row=6, column=0, sticky="ew", pady=(2, 6))
@@ -465,9 +480,13 @@ class Aplikasi:
         self.tingkat_suara.grid(row=0, column=1, padx=10)
         self.bawah_suara.grid_remove()
 
-        self.petunjuk = tk.Label(kanan, anchor="w", bg="#eceff1", fg="#78909c",
+        info = tk.Frame(kanan, bg="#eceff1")
+        info.grid(row=3, column=0, sticky="ew", pady=(4, 0))
+        ttk.Button(info, text="Bersihkan percakapan F8",
+                   command=self.bersihkan_percakapan).pack(side="right")
+        self.petunjuk = tk.Label(info, anchor="w", bg="#eceff1", fg="#78909c",
                                  font=("Segoe UI", 9))
-        self.petunjuk.grid(row=3, column=0, sticky="ew", pady=(4, 0))
+        self.petunjuk.pack(side="left", fill="x", expand=True)
         self._ganti_mode()
 
     def _ganti_mode(self) -> None:
@@ -480,7 +499,7 @@ class Aplikasi:
                 self.bawah_suara.grid()
                 self.status_suara.configure(text="Menyiapkan mikrofon...", fg="#1b5e20")
                 self.pendengar.aktif.set()
-                self.petunjuk.configure(text="Bicara dengan jelas, lalu jeda sebentar untuk mengirim.")
+                self.petunjuk.configure(text="Bicara jelas, lalu jeda sebentar.")
                 self.catat.kabar("SUARA", "masukan lawan bicara: suara")
                 return
         if self.pendengar is not None:
@@ -488,8 +507,7 @@ class Aplikasi:
         self.bawah_suara.grid_remove()
         self.bawah_ketik.grid()
         self.ketik.focus_set()
-        self.petunjuk.configure(text="Ketik pesan lalu tekan Enter. Pesan muncul juga "
-                                     "di sisi kiri.")
+        self.petunjuk.configure(text="Ketik pesan lalu tekan Enter.")
 
     def _pasang_tombol(self) -> None:
         for tombol, perintah in (("<F2>", "kirim"), ("<F3>", "hapus"),
@@ -499,6 +517,7 @@ class Aplikasi:
         self.akar.bind("<F7>", lambda _e: (
             self.mode.set("ketik" if self.mode.get() == "suara" else "suara"),
             self._ganti_mode()))
+        self.akar.bind("<F8>", lambda _e: self.bersihkan_percakapan())
 
     # ---- pesan
     def tambah_pesan(self, pembicara: str, teks: str, via: str = "") -> None:
@@ -508,6 +527,15 @@ class Aplikasi:
         self.catat.kabar("PESAN", f"{pembicara}: {teks}")
         if pembicara == "tuli" and self.suara.get():
             self._antri_suara.append(teks.lower())
+
+    def bersihkan_percakapan(self) -> None:
+        """Kosongkan riwayat di kedua sisi layar. Catatan di log/ tetap ada."""
+        self.obrolan_kiri.kosongkan()
+        self.obrolan_kanan.kosongkan()
+        self.riwayat.kosongkan_layar()
+        self.catat.kabar("PESAN", "percakapan di layar dibersihkan")
+        if self.mode.get() == "ketik":
+            self.ketik.focus_set()
 
     def kirim_ketikan(self) -> None:
         teks = self.ketik.get().strip()

@@ -53,6 +53,7 @@ jalan, atau nama obat, ketika juru bahasa isyarat tidak tersedia.
 | `uji_gambar.py` | uji model pakai file gambar, tanpa kamera |
 | `cabang.py` | model dua cabang (satu tangan / dua tangan) yang dipakai v7 |
 | `latih_cabang.py` | melatih model dua cabang dan menulis ambang hurufnya |
+| `optimasi.py` | mengoptimalkan pembacaan huruf otomatis: ukur, impor, latih ulang, bandingkan |
 | `rekam.py` | merekam peragaan huruf Anda sendiri sebagai data latih |
 | `impor_ukur.py` | mengubah hasil `--ukur` jadi data latih berlabel |
 | `lihat_huruf.py` | menggambar bentuk tangan tiap huruf dari dataset |
@@ -146,7 +147,9 @@ untuk lawan bicara yang tidak tuli: riwayat percakapan, dan kotak untuk mengetik
 kiri untuk penyandang tuli, hijau dan rata kanan untuk lawan bicara, lengkap
 dengan jam. Pesan isyarat terkirim sendiri kalau tidak ada huruf baru selama
 2,5 detik, lalu diucapkan (matikan dengan `--tanpa-suara` atau tombol F6).
-Riwayatnya disimpan di `log/percakapan_<waktu>.txt`. Semua pilihan
+Riwayatnya disimpan di `log/percakapan_<waktu>.txt`. Tombol **Bersihkan
+percakapan** (F8) mengosongkan riwayat di layar; catatan di berkas tetap
+lengkap, hanya diberi penanda kapan layar dibersihkan. Semua pilihan
 `gesture_voice.py` yang menyangkut pembacaan huruf (`--model`, `--kamera`,
 `--min-keyakinan`, dan seterusnya) berlaku juga di sini.
 
@@ -188,6 +191,22 @@ Hasilnya di folder `model_suara/` dan tidak ikut ke GitHub.
 .\run.ps1 -Percakapan --model-ucapan id-small   # paling teliti, sekitar 3x lebih lambat
 .\run.ps1 -Percakapan --mikrofon 1             # pilih mikrofon lain
 ```
+
+### Mengoptimalkan pembacaan satu huruf
+
+Kalau ada huruf yang sering salah, satu perintah mengerjakan semuanya: mengukur
+huruf itu di depan kamera Anda, memasukkan hasilnya jadi data latih, menyalin
+model lama sebagai cadangan, lalu melatih ulang.
+
+```powershell
+.\run.ps1 -Optimasi K                      # dua sesi ukur untuk K, lalu latih ulang
+.\run.ps1 -Optimasi K H P --verifikasi     # beberapa huruf, lalu ukur lagi dan bandingkan
+.\run.ps1 -Optimasi --lewati-ukur          # latih dari sesi ukur yang sudah ada
+```
+
+Anda hanya memperagakan hurufnya (tekan Q sesudah 200 sampai 300 frame). Ubah
+posisi dan jarak tangan di tiap sesi, kalau tidak model hanya menghafal jarak
+tangan. Model lama disalin ke `log/cadangan_<waktu>/`.
 
 Untuk mencoba tanpa menyalakan kamera, pakai gambar di folder `contoh/`:
 

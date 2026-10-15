@@ -18,6 +18,10 @@
 #                                   dilaporkan seberapa baik huruf itu terbaca
 #                                   oleh kamera Anda sendiri
 #
+# Mengoptimalkan pembacaan huruf secara otomatis (ukur, impor, latih ulang)
+#   .\run.ps1 -Optimasi K               ukur K dua sesi, lalu latih ulang
+#   .\run.ps1 -Optimasi K H P --verifikasi   beberapa huruf, lalu ukur lagi dan bandingkan
+#
 # Percakapan dua sisi: isyarat di kiri, lawan bicara mengetik di kanan
 #   .\run.ps1 -Percakapan           semua pilihan di atas ikut berlaku, misalnya
 #   .\run.ps1 -Percakapan --tanpa-suara
@@ -30,6 +34,7 @@
 param(
     [switch]$Uji,
     [switch]$Percakapan,
+    [switch]$Optimasi,
     [Parameter(ValueFromRemainingArguments = $true)] $Args
 )
 
@@ -56,5 +61,5 @@ if (-not $py) {
     exit 1
 }
 
-$skrip = if ($Uji) { "uji_gambar.py" } elseif ($Percakapan) { "percakapan.py" } else { "gesture_voice.py" }
+$skrip = if ($Uji) { "uji_gambar.py" } elseif ($Percakapan) { "percakapan.py" } elseif ($Optimasi) { "optimasi.py" } else { "gesture_voice.py" }
 & $py $skrip @Args
