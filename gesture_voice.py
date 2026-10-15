@@ -347,17 +347,19 @@ def muat_ambang_huruf(catat=None, nama_model: str | None = None) -> dict:
     rendah pun aman, sedangkan E justru lebih sering yakin waktu salah sehingga
     lebih baik ditolak sama sekali.
 
-    Kalau ada ambang_<nama model>.json (misalnya ambang_rf_bisindo_v7.pkl ->
-    ambang_rf_bisindo_v7.json), berkas itu dipakai untuk model tersebut. Ambang
-    dari satu model tidak cocok untuk model lain: keyakinan tiap model punya
-    skala sendiri, dan huruf yang ditolak di model lama bisa terbaca bagus di
-    model baru.
+    Profil ambang hasil video berlabel didahulukan, lalu ambang_<nama model>.json.
+    Ambang dari satu model tidak cocok untuk model lain: keyakinan tiap model
+    punya skala sendiri, dan huruf yang ditolak di model lama bisa terbaca bagus
+    di model baru.
     """
     folder = Path(__file__).resolve().parent
     berkas = folder / "ambang_huruf.json"
     if nama_model:
+        kalibrasi = folder / f"ambang_kalibrasi_{Path(nama_model).stem}.json"
         khusus = folder / f"ambang_{Path(nama_model).stem}.json"
-        if khusus.exists():
+        if kalibrasi.exists():
+            berkas = kalibrasi
+        elif khusus.exists():
             berkas = khusus
     if not berkas.exists():
         if catat:
@@ -378,8 +380,33 @@ def muat_ambang_huruf(catat=None, nama_model: str | None = None) -> dict:
     return ambang
 
 
+def muat_pengaturan_deteksi() -> dict[str, float]:
+    """Muat ambang MediaPipe hasil kalibrasi, atau gunakan nilai bawaan."""
+    bawaan = {
+        "min_detection_confidence": 0.6,
+        "min_tracking_confidence": 0.5,
+    }
+    berkas = Path(__file__).resolve().parent / "deteksi.json"
+    if not berkas.exists():
+        return bawaan
+
+    isi = json.loads(berkas.read_text(encoding="utf-8"))
+    if not isinstance(isi, dict):
+        raise ValueError(f"Format {berkas.name} harus berupa objek JSON.")
+
+    hasil = {}
+    for nama, nilai_bawaan in bawaan.items():
+        nilai = isi.get(nama, nilai_bawaan)
+        if (isinstance(nilai, bool) or not isinstance(nilai, (int, float))
+                or not 0.0 <= nilai <= 1.0):
+            raise ValueError(f"{nama} di {berkas.name} harus berupa angka 0 sampai 1.")
+        hasil[nama] = float(nilai)
+    return hasil
+
+
 # ----------------------------------------------------------------------- argumen
 def baca_argumen() -> argparse.Namespace:
+    pengaturan_deteksi = muat_pengaturan_deteksi()
     p = argparse.ArgumentParser(
         description="Pengenal huruf BISINDO dengan suara (Google TTS)",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -405,9 +432,11 @@ def baca_argumen() -> argparse.Namespace:
                    help="jangan bunyikan tiap huruf, cuma kata yang jadi")
     p.add_argument("--tanpa-auto-ucap", action="store_true",
                    help="jangan bunyikan otomatis, tetap bisa lewat tombol ENTER")
-    p.add_argument("--keyakinan-deteksi", type=float, default=0.6,
+    p.add_argument("--keyakinan-deteksi", type=float,
+                   default=pengaturan_deteksi["min_detection_confidence"],
                    help="ambang MediaPipe untuk mulai mendeteksi tangan")
-    p.add_argument("--keyakinan-tracking", type=float, default=0.5,
+    p.add_argument("--keyakinan-tracking", type=float,
+                   default=pengaturan_deteksi["min_tracking_confidence"],
                    help="ambang MediaPipe untuk terus mengikuti tangan")
     p.add_argument("--model", default=PATH_MODEL,
                    help="berkas model yang dipakai. Ganti ke versi lama kalau "

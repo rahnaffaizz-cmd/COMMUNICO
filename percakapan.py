@@ -19,7 +19,7 @@ Cara pakai:
     python percakapan.py --kamera 1 --model rf_bisindo_v7.pkl
     python percakapan.py --tanpa-suara        # pesan isyarat tidak diucapkan
     python percakapan.py --mulai-dengan-suara # lawan bicara langsung berbicara
-    python percakapan.py --model-ucapan id-small   # pengenal suara lebih teliti, lebih lambat
+    python percakapan.py --model-ucapan id-small # pengenal suara lebih teliti, lebih lambat
 
 Tombol (selain tombol di layar):
     ENTER di kotak ketik   kirim pesan lawan bicara
@@ -357,7 +357,7 @@ class Aplikasi:
         self._antri_suara: list[str] = []
         self._gambar_sekarang = None          # simpan rujukan, kalau tidak Tk membuangnya
 
-        akar.title("BISINDO - Percakapan dua sisi")
+        akar.title("COMUNICO - Percakapan dua sisi")
         # Ukuran mengikuti layar, supaya riwayat di bawah video tetap kelihatan
         # walaupun layarnya kecil atau pembesaran Windows-nya tinggi.
         lebar = min(1400, akar.winfo_screenwidth() - 80)
@@ -367,17 +367,45 @@ class Aplikasi:
         akar.configure(bg="#eceff1")
         akar.columnconfigure(0, weight=1, uniform="sisi")
         akar.columnconfigure(1, weight=1, uniform="sisi")
-        akar.rowconfigure(0, weight=1)
+        akar.rowconfigure(1, weight=1)
 
+        self._bangun_merek()
         self._bangun_kiri()
         self._bangun_kanan()
         self._pasang_tombol()
         akar.protocol("WM_DELETE_WINDOW", self.tutup)
 
+    def _bangun_merek(self) -> None:
+        kepala = tk.Frame(self.akar, bg="#eceff1")
+        kepala.grid(row=0, column=0, columnspan=2, sticky="ew", padx=12, pady=(10, 2))
+
+        logo = tk.Canvas(kepala, width=48, height=48, bg="#17324d",
+                         highlightthickness=0)
+        logo.pack(side="left")
+        logo.create_oval(7, 7, 32, 30, fill="#ffffff", outline="")
+        logo.create_polygon(10, 25, 8, 34, 18, 29, fill="#ffffff", outline="")
+        logo.create_oval(19, 18, 42, 39, fill="#54d6c7", outline="")
+        logo.create_polygon(34, 34, 41, 41, 40, 31, fill="#54d6c7", outline="")
+        for x, y, warna in ((14, 17, "#17324d"), (20, 17, "#17324d"),
+                            (26, 17, "#17324d"), (25, 28, "#17324d"),
+                            (31, 28, "#17324d"), (37, 28, "#17324d")):
+            logo.create_oval(x, y, x + 2, y + 2, fill=warna, outline="")
+
+        identitas = tk.Frame(kepala, bg="#eceff1")
+        identitas.pack(side="left", padx=(12, 0), pady=2)
+        tk.Label(identitas, text="COMUNICO", bg="#eceff1", fg="#17324d",
+                 font=("Segoe UI", 17, "bold")).pack(anchor="w")
+        tk.Label(identitas, text="ISYARAT  •  SUARA  •  PESAN", bg="#eceff1",
+                 fg="#607d8b", font=("Segoe UI", 9, "bold")).pack(anchor="w")
+
+        tk.Label(kepala, text="BISINDO", bg="#d9f3ef", fg="#087e72",
+                 font=("Segoe UI", 9, "bold"), padx=12, pady=5
+                 ).pack(side="right", pady=7)
+
     # ---- sisi kiri: penyandang tuli
     def _bangun_kiri(self) -> None:
         kiri = tk.Frame(self.akar, bg="#eceff1")
-        kiri.grid(row=0, column=0, sticky="nsew", padx=(12, 6), pady=12)
+        kiri.grid(row=1, column=0, sticky="nsew", padx=(12, 6), pady=(4, 12))
         kiri.columnconfigure(0, weight=1)
         kiri.rowconfigure(7, weight=1)
 
@@ -436,7 +464,7 @@ class Aplikasi:
     # ---- sisi kanan: lawan bicara
     def _bangun_kanan(self) -> None:
         kanan = tk.Frame(self.akar, bg="#eceff1")
-        kanan.grid(row=0, column=1, sticky="nsew", padx=(6, 12), pady=12)
+        kanan.grid(row=1, column=1, sticky="nsew", padx=(6, 12), pady=(4, 12))
         kanan.columnconfigure(0, weight=1)
         kanan.rowconfigure(1, weight=1)
 
@@ -635,6 +663,7 @@ class Aplikasi:
 def baca_argumen(argv=None) -> argparse.Namespace:
     import gesture_voice as gv
 
+    pengaturan_deteksi = gv.muat_pengaturan_deteksi()
     p = argparse.ArgumentParser(
         description="Percakapan dua sisi: isyarat BISINDO dan ketikan lawan bicara")
     p.add_argument("--kamera", type=int, default=0)
@@ -654,14 +683,15 @@ def baca_argumen(argv=None) -> argparse.Namespace:
     p.add_argument("--jeda", type=float, default=1.2)
     p.add_argument("--tahan-tangan-hilang", type=int, default=15, metavar="FRAME",
                    help="abaikan frame satu tangan sesaat setelah dua tangan (0 = mati)")
-    p.add_argument("--keyakinan-deteksi", type=float, default=0.6)
-    p.add_argument("--keyakinan-tracking", type=float, default=0.5)
+    p.add_argument("--keyakinan-deteksi", type=float,
+                   default=pengaturan_deteksi["min_detection_confidence"])
+    p.add_argument("--keyakinan-tracking", type=float,
+                   default=pengaturan_deteksi["min_tracking_confidence"])
     p.add_argument("--ambang-seragam", action="store_true",
                    help="abaikan ambang per huruf, pakai --min-keyakinan untuk semua")
     p.add_argument("--model-ucapan", default="id-base",
-                   help="model pengenal suara (CPU, int8). id-base (bawaan) dan id-small "
-                        "disetel untuk bahasa Indonesia, lebih tepat daripada Whisper "
-                        "biasa. Untuk bahasa lain pakai tiny, base, small, atau medium")
+                   help="model pengenal suara (CPU, int8). id-base/id-small disetel "
+                        "untuk bahasa Indonesia; untuk bahasa lain pakai tiny/base/small/medium")
     p.add_argument("--beam-ucapan", type=int, default=5,
                    help="lebar pencarian pengenal suara; makin besar makin teliti dan "
                         "sedikit lebih lambat (bawaan 5)")

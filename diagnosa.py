@@ -95,7 +95,7 @@ def cari_ambang(benar_semua: np.ndarray, yakin: np.ndarray,
     if len(yakin) == 0:
         return AMBANG_MENYERAH, 0.0, 0.0
 
-    for ambang in np.arange(0.20, 1.00, 0.01):
+    for ambang in np.round(np.arange(0.20, 1.00, 0.01), 2):
         lolos = yakin >= ambang
         if lolos.sum() == 0:
             break

@@ -5,12 +5,11 @@
 ![Lisensi](https://img.shields.io/badge/Lisensi-MIT-blue)
 
 Program yang membaca huruf **BISINDO** (Bahasa Isyarat Indonesia) lewat kamera,
-membacakan hasilnya dengan suara, dan menjadi jembatan percakapan dua arah antara
-penyandang tuli dan lawan bicara yang tidak tuli.
+membacakannya dengan suara, dan membantu percakapan dua arah.
 
 ```
 kamera ──▶ MediaPipe cari titik tangan ──▶ 126 angka koordinat
-       ──▶ model dua cabang menebak huruf A-Z (satu tangan / dua tangan)
+       ──▶ model dua cabang menebak huruf (rf_bisindo_v7.pkl)
        ──▶ disaring lewat voting ──▶ huruf ditumpuk jadi kata
        ──▶ dibunyikan pakai Google TTS (bahasa Indonesia)
 
@@ -20,26 +19,6 @@ mikrofon ──▶ Whisper bahasa Indonesia (CPU saja) ──▶ teks di percaka
 Dibuat untuk membantu komunikasi sehari-hari yang singkat: mengeja nama, nama
 jalan, atau nama obat, ketika juru bahasa isyarat tidak tersedia.
 
-## Yang bisa dilakukan sekarang
-
-- **Membaca huruf A sampai Z** lewat kamera, baik huruf satu tangan maupun dua
-  tangan. Model `rf_bisindo_v7.pkl` punya dua cabang: kalau satu tangan terlihat
-  hanya C, E, I, J, L, O, R, U, V, Z yang bisa dijawab, kalau dua tangan terlihat
-  hanya 16 huruf sisanya. Diukur per foto asli pada dataset publik, pada sampel
-  yang mengikuti aturan itu, ketepatannya 86,4% (model satu cabang sebelumnya
-  71,2%). Lihat `VERSI_MODEL.md`.
-- **Percakapan dua sisi** (`.\run.ps1 -Percakapan`): kiri untuk Bahasa Isyarat
-  (kamera dan teks hasil bacaan), kanan untuk lawan bicara yang mengetik **atau
-  berbicara**. Tiap baris diberi tanda siapa yang bicara.
-- **Suara ke teks bahasa Indonesia** yang jalan di CPU saja, tanpa kartu grafis
-  (WER 13,9% pada ucapan bacaan nyata, lihat bagian percakapan di bawah).
-- **Disetel dengan tangan dan kamera Anda sendiri**: peragakan satu huruf dengan
-  `--ukur`, masukkan hasilnya jadi data latih dengan `impor_ukur.py`, lalu latih
-  ulang dengan `latih_cabang.py`.
-- **Tahan terhadap hal-hal yang biasa mengganggu**: urutan tangan dari MediaPipe
-  yang berubah-ubah (tangan disusun kiri ke kanan dulu), satu tangan yang hilang
-  sesaat dari deteksi, dan suara pembacaan yang tertangkap mikrofon.
-
 ---
 
 ## Isi folder
@@ -47,13 +26,12 @@ jalan, atau nama obat, ketika juru bahasa isyarat tidak tersedia.
 | File | Gunanya |
 |---|---|
 | `gesture_voice.py` | program utama, pakai kamera |
-| `percakapan.py` | percakapan dua sisi: isyarat di kiri, lawan bicara mengetik atau berbicara di kanan |
-| `suara_ke_teks.py` | suara ke teks bahasa Indonesia (Whisper di CPU), dipakai `percakapan.py` |
-| `siapkan_model_suara.py` | menyiapkan model suara bahasa Indonesia, sekali per komputer |
+| `percakapan.py` | percakapan dua sisi: isyarat di kiri, lawan bicara mengetik di kanan |
+| `optimasi.py` | optimasi huruf otomatis: rekam, impor, latih ulang, dan bandingkan |
+| `siapkan_model_suara.py` | menyiapkan model suara bahasa Indonesia |
 | `uji_gambar.py` | uji model pakai file gambar, tanpa kamera |
 | `cabang.py` | model dua cabang (satu tangan / dua tangan) yang dipakai v7 |
 | `latih_cabang.py` | melatih model dua cabang dan menulis ambang hurufnya |
-| `optimasi.py` | mengoptimalkan pembacaan huruf otomatis: ukur, impor, latih ulang, bandingkan |
 | `rekam.py` | merekam peragaan huruf Anda sendiri sebagai data latih |
 | `impor_ukur.py` | mengubah hasil `--ukur` jadi data latih berlabel |
 | `lihat_huruf.py` | menggambar bentuk tangan tiap huruf dari dataset |
@@ -61,6 +39,7 @@ jalan, atau nama obat, ketika juru bahasa isyarat tidak tersedia.
 | `fitur.py` | mengubah titik tangan jadi angka yang dipelajari model |
 | `catatan.py` | mencatat jalannya program di tiap tahap |
 | `diagnosa.py` | memeriksa tiap huruf dan mencari ambang keyakinan terbaiknya |
+| `optimasi_deteksi.py` | mengalibrasi deteksi tangan dan ambang huruf dari video berlabel |
 | `ambang_huruf.json` | ambang keyakinan per huruf, dipakai otomatis |
 | `AKURASI.md` | catatan ketepatan tiap huruf beserta cara mengukurnya |
 | `VERSI_MODEL.md` | daftar versi model dan cara kembali ke versi lama |
@@ -68,9 +47,9 @@ jalan, atau nama obat, ketika juru bahasa isyarat tidak tersedia.
 | `latih.py` | melatih ulang model dan membandingkannya dengan yang lama |
 | `evaluasi.py` | ukur ketepatan model secara jujur, jadi tolok ukur perbaikan |
 | `rf_bisindo_v7.pkl` | **model yang dipakai sekarang**, dua cabang (7 MB) |
-| `ambang_rf_bisindo_v7.json` | ambang keyakinan per huruf khusus v7, dipakai otomatis |
-| `rf_bisindo_v2.pkl` ... `v6` | versi sebelumnya, disimpan untuk pembanding (lihat `VERSI_MODEL.md`) |
-| `rf_bisindo_99.pkl` | model paling awal, disimpan untuk pembanding (30 MB) |
+| `ambang_rf_bisindo_v7.json` | ambang keyakinan per huruf khusus v7 |
+| `rf_bisindo_v2.pkl`–`rf_bisindo_v6.pkl` | versi lama, disimpan untuk pembanding |
+| `rf_bisindo_99.pkl` | model awal, disimpan untuk pembanding (30 MB) |
 | `contoh/` | 4 foto isyarat untuk bahan uji coba |
 | `run.ps1` / `run.bat` | tinggal dijalankan, tidak perlu ketik path Python |
 | `setup.ps1` | pemasangan otomatis di komputer baru |
@@ -157,38 +136,42 @@ lengkap, hanya diberi penanda kapan layar dibersihkan. Semua pilihan
 *masukan*: **Ketik** atau **Suara** (tombol F7). Pada mode Suara, ucapan lewat
 mikrofon diubah jadi teks dan muncul sebagai satu pesan, sama seperti ketikan,
 dengan tanda "(suara)" di namanya. Pengenalnya model Whisper (`faster-whisper`)
-yang jalan di **CPU saja**, tanpa kartu grafis. Selama suara hasil pembacaan
-isyarat sedang berbunyi, mikrofon diabaikan supaya tidak terbaca ulang.
+yang jalan di **CPU saja**, tanpa kartu grafis. Model bawaan `id-base` disetel
+untuk bahasa Indonesia dan disiapkan otomatis saat mode suara pertama kali
+dinyalakan. Proses konversi model ini memerlukan `uv` dan internet; pasang
+`uv` dengan `winget install astral-sh.uv` bila belum ada. Setelah siap, model
+tersimpan di komputer dan pemakaian berikutnya tidak perlu internet. Selama
+suara hasil pembacaan isyarat sedang berbunyi, mikrofon diabaikan supaya tidak
+terbaca ulang.
 
-**Dioptimalkan untuk bahasa Indonesia.** Whisper bawaan lemah di bahasa
-Indonesia, jadi dipakai Whisper yang disetel khusus untuk bahasa Indonesia
-(`id-base`, dari maleo-ai, lisensi Apache-2.0). Tingkat kesalahan kata (WER),
-diukur pada 64 ucapan manusia nyata dari FLEURS bahasa Indonesia, panjang sampai
-15 detik:
+### Optimasi pengenalan per huruf
 
-| Model | WER | Waktu per ucapan (sekitar 5 detik) |
-|---|---|---|
-| Whisper `base` biasa (sebelumnya) | 45,6% | 0,9 detik |
-| Whisper `small` biasa | 19,2% | sekitar 3 detik |
-| **`id-base`** (bawaan, beam 5) | **13,9%** | **1,1 detik** |
-| `id-small` | 10,8% | sekitar 3 detik |
-
-Ini ucapan bacaan yang cukup bersih. Percakapan spontan, derau ruangan, dan
-mikrofon laptop akan menghasilkan angka yang lebih buruk.
-
-Modelnya disiapkan **sekali** (diunduh atau dikonversi, sekitar 2 menit, butuh
-`uv` dan internet), otomatis saat mode suara pertama dinyalakan, atau lewat:
+Jika huruf tertentu sering salah terbaca, jalankan optimasi terpandu berikut
+untuk merekam beberapa sesi dari kamera, memasukkannya ke data latihan,
+mencadangkan model lama, lalu melatih ulang:
 
 ```powershell
-.\.venv\Scripts\python.exe siapkan_model_suara.py            # id-base
-.\.venv\Scripts\python.exe siapkan_model_suara.py --semua     # termasuk id-small
+.\run.ps1 -Optimasi K
+.\run.ps1 -Optimasi K H P --verifikasi
+.\run.ps1 -Optimasi --lewati-ukur
 ```
 
-Hasilnya di folder `model_suara/` dan tidak ikut ke GitHub.
+Peragakan tiap huruf terus-menerus selama sekitar 200–300 frame. Ubah posisi
+dan jarak tangan pada setiap sesi; untuk huruf dua tangan, pastikan keduanya
+terlihat di kamera. Sesi verifikasi mengukur ulang hasil sesudah model dilatih.
+Model lama dicadangkan di `log/cadangan_<waktu>/`.
+
+Kalibrasi deteksi dari klip video berlabel juga tersedia lewat
+[`optimasi_deteksi.py`](optimasi_deteksi.py), dengan panduan nama video dan
+perintah di bawah ini.
+
+Untuk mengosongkan riwayat pesan pada kedua panel, klik **Bersihkan pesan
+(F8)** atau tekan **F8**, lalu konfirmasi. Log percakapan di `log/` tetap lengkap
+dan mencatat kapan layar dibersihkan.
 
 ```powershell
 .\run.ps1 -Percakapan --mulai-dengan-suara     # langsung mode suara
-.\run.ps1 -Percakapan --model-ucapan id-small   # paling teliti, sekitar 3x lebih lambat
+.\run.ps1 -Percakapan --model-ucapan id-small  # lebih teliti, sekitar 3x lebih lambat
 .\run.ps1 -Percakapan --mikrofon 1             # pilih mikrofon lain
 ```
 
@@ -231,14 +214,6 @@ lalu `.venv` di folder induk, terakhir `python` yang ada di PATH.
 ---
 
 ## Ambang keyakinan yang berbeda tiap huruf
-
-> **Catatan.** Angka dan tabel di bagian ini berasal dari model lama (v2) dan
-> `ambang_huruf.json`; bagian ini dibiarkan sebagai catatan bagaimana cara
-> kerjanya. Model bawaan sekarang (v7) punya ambang sendiri di
-> `ambang_rf_bisindo_v7.json`, dihitung `latih_cabang.py` dari tebakan yang
-> belum pernah dilihat modelnya, dan **tidak ada huruf yang ditolak**. Program
-> memilih berkas ambang yang cocok dengan modelnya, dan memuat ulang saat model
-> diganti.
 
 Ambang tunggal untuk semua huruf itu kasar, karena perilaku tiap huruf jauh
 berbeda. `diagnosa.py` memeriksanya satu per satu, lalu menulis ambang yang pas
@@ -297,6 +272,40 @@ Semua huruf jadi ikut masuk, tapi ketepatannya turun drastis.
 
 Makin tinggi targetnya, makin sedikit huruf yang lolos tapi makin jarang salah.
 
+### Kalibrasi dengan video kamera Anda
+
+`diagnosa.py` memakai dataset contoh. Untuk menyesuaikan deteksi tangan dan
+ambang pengenalan huruf dengan kamera serta peragaan Anda sendiri, siapkan video
+pendek yang setiap klipnya menampilkan satu huruf. Nama file menjadi label:
+
+```text
+data/kalibrasi_deteksi/A_01.mp4
+data/kalibrasi_deteksi/A_02.mp4
+data/kalibrasi_deteksi/B_01.mp4
+...
+```
+
+Rekam beberapa klip untuk tiap huruf dengan posisi dan pencahayaan yang
+bervariasi. Lalu jalankan:
+
+```powershell
+.\.venv\Scripts\python.exe optimasi_deteksi.py --video-dir .\data\kalibrasi_deteksi
+```
+
+Program menguji beberapa kombinasi ambang MediaPipe, mengukur berapa banyak
+frame tangan terdeteksi dan berapa banyak prediksi yang benar, kemudian
+menghitung ambang keyakinan tersendiri untuk tiap huruf dari video berlabel.
+Pengaturan deteksi disimpan di `deteksi.json`; ambang huruf disimpan sebagai
+`ambang_kalibrasi_<nama-model>.json`. Keduanya dipakai otomatis oleh program
+percakapan, pengenal kamera, dan perekam. Pilihan
+`--keyakinan-deteksi` / `--keyakinan-tracking` saat menjalankan program tetap
+bisa dipakai untuk menimpa pengaturan deteksi.
+
+Kalibrasi ini mengukur ulang klip yang diberikan, bukan jaminan akurasi untuk
+kondisi lain. Gunakan beberapa klip terpisah per huruf; bila kalibrasi huruf
+tertentu tidak punya cukup contoh, ambangnya bisa terlalu cocok dengan video
+tersebut.
+
 ---
 
 ## Melihat apa yang terjadi di dalam program
@@ -308,7 +317,7 @@ berkas di folder `log/`. Tanpa ini, kalau hurufnya salah kita cuma tahu
 Tampilan biasa hanya menampilkan kejadian penting:
 
 ```
-10:30:21 [MULAI   ] model rf_bisindo_v7.pkl, butuh 197 angka masukan
+10:30:21 [MULAI   ] model rf_bisindo_v2.pkl, butuh 162 angka masukan
 10:30:21 [HURUF   ] 'I' diterima  ->  teks sekarang: "I"
 10:30:21 [HURUF   ] 'T' diterima  ->  teks sekarang: "IT"
 10:30:21 [HURUF   ] 'U' diterima  ->  teks sekarang: "ITU"
@@ -542,10 +551,6 @@ perbaikan nyata — seberapa pun bagusnya angka yang keluar dari pembagian acak.
 
 ## Ucapan terima kasih
 
-- **Abravia Mouzahra Ramadhani** dan **Shabri Sebastian Siregar** (SMK Telkom Malang)
-  — proyek [gestura-bisindo](https://github.com/ShabriSebastian/gestura-bisindo) (MIT),
-  sistem pengenalan BISINDO real-time dengan MediaPipe, TensorFlow, dan aplikasi
-  Android. Gesture Voice dikembangkan di dalam proyek induk ini.
 - **Krisna Santosa** — model `rf_bisindo_99.pkl` dan foto contoh, dari proyek
   [realtime-bisindo-classification](https://github.com/KrisnaSantosa15/realtime-bisindo-classification) (MIT).
 - **Google MediaPipe** — pendeteksi titik tangan.

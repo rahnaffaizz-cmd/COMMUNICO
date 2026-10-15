@@ -89,10 +89,19 @@ def teks(frame, isi: str, y: int, warna=PUTIH) -> None:
 
 
 def utama() -> int:
+    from gesture_voice import muat_pengaturan_deteksi
+
+    pengaturan_deteksi = muat_pengaturan_deteksi()
     p = argparse.ArgumentParser(description="Merekam peragaan huruf BISINDO Anda sendiri")
     p.add_argument("huruf", help="huruf yang direkam, A sampai Z")
     p.add_argument("--jumlah", type=int, default=300, help="jumlah frame yang direkam")
     p.add_argument("--kamera", type=int, default=0)
+    p.add_argument("--keyakinan-deteksi", type=float,
+                   default=pengaturan_deteksi["min_detection_confidence"],
+                   help="ambang MediaPipe untuk mulai mendeteksi tangan")
+    p.add_argument("--keyakinan-tracking", type=float,
+                   default=pengaturan_deteksi["min_tracking_confidence"],
+                   help="ambang MediaPipe untuk terus mengikuti tangan")
     p.add_argument("--wajib-dua-tangan", action="store_true",
                    help="lewati frame yang cuma terlihat satu tangan")
     p.add_argument("--keluaran", type=Path, default=BERKAS_PENGGUNA)
@@ -113,8 +122,11 @@ def utama() -> int:
         return 1
 
     mp_tangan, mp_gambar = mp.solutions.hands, mp.solutions.drawing_utils
-    pendeteksi = mp_tangan.Hands(max_num_hands=2, min_detection_confidence=0.6,
-                                 min_tracking_confidence=0.5)
+    pendeteksi = mp_tangan.Hands(
+        max_num_hands=2,
+        min_detection_confidence=arg.keyakinan_deteksi,
+        min_tracking_confidence=arg.keyakinan_tracking,
+    )
 
     baris: list[list[float]] = []
     merekam = False

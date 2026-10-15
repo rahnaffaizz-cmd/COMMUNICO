@@ -10,10 +10,9 @@ ALURNYA
                                  ucapan jadi teks
              -> teks jadi satu pesan di percakapan
 
-Modelnya berjalan di CPU dengan kuantisasi int8, tanpa kartu grafis. Ukuran
-`base` (sekitar 145 MB) cukup cepat di laptop biasa; `small` lebih teliti tapi
-lebih lambat. Modelnya diunduh sekali saat pertama dipakai, lalu tersimpan di
-komputer, jadi pemakaian berikutnya tidak butuh internet.
+Modelnya berjalan di CPU dengan kuantisasi int8, tanpa kartu grafis. Model
+`id-base` disetel untuk bahasa Indonesia; model dan dependensi konversinya
+disiapkan sekali saat pertama dipakai.
 
 DUA HAL YANG SENGAJA DIJAGA
 ---------------------------
@@ -127,16 +126,14 @@ class PemotongUcapan:
 class PengenalSuara:
     """Whisper di CPU. Modelnya baru dimuat saat pertama dibutuhkan."""
 
-    def __init__(self, ukuran: str = "id-base", bahasa: str = "id", jumlah_thread: int = 4,
-                 beam: int = 5, lapor=None):
-        # ukuran: "id-base" atau "id-small" (disetel untuk bahasa Indonesia, lihat
-        # siapkan_model_suara.py), nama ukuran Whisper biasa (tiny, base, small,
-        # medium), atau jalur ke folder model CTranslate2.
+    def __init__(self, ukuran: str = "id-base", bahasa: str = "id",
+                 jumlah_thread: int = 4, beam: int = 5, lapor=None):
+        # Bisa memakai model Indonesia yang disiapkan lokal atau ukuran Whisper biasa.
         self.ukuran = ukuran
         self.bahasa = bahasa
         self.jumlah_thread = jumlah_thread
         self.beam = beam
-        self.lapor = lapor or (lambda teks: None)      # untuk menampilkan kemajuan
+        self.lapor = lapor or (lambda _teks: None)
         self._model = None
 
     @property
@@ -159,7 +156,6 @@ class PengenalSuara:
 
             from siapkan_model_suara import MODEL, siapkan
 
-            # Model bahasa Indonesia disiapkan (diunduh atau dikonversi) sekali.
             sumber = str(siapkan(self.ukuran, self.lapor)) if self.ukuran in MODEL \
                 else self.ukuran
             self.lapor(f"Memuat model suara '{self.ukuran}' ...")
@@ -183,8 +179,6 @@ class PengenalSuara:
                 continue
             bagian.append(s.text.strip())
         hasil = " ".join(b for b in bagian if b).strip()
-        # Model bahasa Indonesia mengeluarkan huruf kecil semua; huruf pertama
-        # dikapitalkan supaya pesan enak dibaca.
         return hasil[:1].upper() + hasil[1:]
 
 

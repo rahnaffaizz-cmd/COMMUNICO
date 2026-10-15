@@ -27,6 +27,7 @@ desktop.ini
 # Berkas ini besar (23 MB) dan diunduh otomatis oleh evaluasi.py saat pertama
 # dipakai, jadi tidak perlu ikut disimpan di repo.
 data/
+model_suara/
 
 # --- Hasil sementara ---------------------------------------------------------
 # Suara gTTS sebenarnya disimpan di folder TEMP sistem, tapi kalau ada yang
@@ -38,6 +39,3 @@ log/
 
 # Gambar bentuk huruf, dibuat ulang dengan lihat_huruf.py.
 bentuk/
-
-# Model suara bahasa Indonesia, disiapkan siapkan_model_suara.py (ratusan MB).
-model_suara/
