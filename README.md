@@ -26,9 +26,13 @@ jalan, atau nama obat, ketika juru bahasa isyarat tidak tersedia.
 | File | Gunanya |
 |---|---|
 | `gesture_voice.py` | program utama, pakai kamera |
-| `percakapan.py` | percakapan dua sisi: isyarat di kiri, lawan bicara mengetik di kanan |
+| `percakapan.py` | percakapan dua sisi: isyarat di kiri, lawan bicara mengetik atau berbicara di kanan |
+| `tampilan.py` | komponen layar bersudut bulat (kartu, tombol, gelembung, video) untuk `percakapan.py` |
 | `optimasi.py` | optimasi huruf otomatis: rekam, impor, latih ulang, dan bandingkan |
 | `siapkan_model_suara.py` | menyiapkan model suara bahasa Indonesia |
+| `esp32.py` | sambungan ke ESP32-CAM: video, mikrofon, dan pesan ke layar OLED |
+| `firmware/comunico_esp32/` | sketch Arduino untuk ESP32-CAM + INMP441 + OLED |
+| `aset/` | logo COMUNICO dan ikon jendela |
 | `uji_gambar.py` | uji model pakai file gambar, tanpa kamera |
 | `cabang.py` | model dua cabang (satu tangan / dua tangan) yang dipakai v7 |
 | `latih_cabang.py` | melatih model dua cabang dan menulis ambang hurufnya |
@@ -165,9 +169,9 @@ Kalibrasi deteksi dari klip video berlabel juga tersedia lewat
 [`optimasi_deteksi.py`](optimasi_deteksi.py), dengan panduan nama video dan
 perintah di bawah ini.
 
-Untuk mengosongkan riwayat pesan pada kedua panel, klik **Bersihkan pesan
-(F8)** atau tekan **F8**, lalu konfirmasi. Log percakapan di `log/` tetap lengkap
-dan mencatat kapan layar dibersihkan.
+Untuk mengosongkan percakapan di layar, klik **Bersihkan percakapan · F8** atau
+tekan **F8**. Log percakapan di `log/` tetap lengkap dan mencatat kapan layar
+dibersihkan.
 
 ```powershell
 .\run.ps1 -Percakapan --mulai-dengan-suara     # langsung mode suara
@@ -210,6 +214,40 @@ Ketepatan: 4/4 = 100%
 
 Launcher akan mencari Python secara berurutan: folder `.venv` di dalam repo ini,
 lalu `.venv` di folder induk, terakhir `python` yang ada di PATH.
+
+### Memakai ESP32-CAM sebagai kamera dan mikrofon
+
+ESP32-CAM bisa menggantikan kamera dan mikrofon laptop. ESP32 hanya mengirim
+gambar dan suara lewat Wi-Fi; pembacaan isyarat dan suara ke teks tetap di
+laptop. Setiap pesan (hasil isyarat maupun ucapan lawan bicara) dikirim balik
+dan tampil di layar OLED ESP32.
+
+| Arah | Port | Isi |
+|---|---|---|
+| ESP32 → laptop | 81 `GET /stream` | video MJPEG 640×480 |
+| ESP32 → laptop | 82 `GET /audio` | suara PCM 16 kHz, mono, 16 bit |
+| laptop → ESP32 | 80 `POST /pesan?dari=isyarat\|lawan` | teks pesan untuk OLED |
+
+Perangkat: ESP32-CAM (AI-Thinker), mikrofon INMP441, dan OLED SSD1306 128×64.
+Rangkaian, library, dan pengaturan board ada di kepala
+[`firmware/comunico_esp32/comunico_esp32.ino`](firmware/comunico_esp32/comunico_esp32.ino).
+
+1. Isi `WIFI_NAMA` dan `WIFI_SANDI` di sketch, lalu unggah lewat Arduino IDE.
+   Laptop dan ESP32 harus di jaringan yang sama.
+2. Setelah tersambung, alamat IP ESP32 muncul di baris atas OLED.
+3. Di laptop, isi alamat itu di kolom **ESP32** di kanan atas jendela
+   percakapan lalu klik **Hubungkan**, atau langsung:
+
+```powershell
+.\run.ps1 -Percakapan --esp32 192.168.1.50
+.\run.ps1 -Percakapan --esp32 192.168.1.50 --mulai-dengan-suara
+```
+
+Dengan `--esp32`, kamera laptop tidak wajib ada. Mode suara (F7) memakai
+mikrofon ESP32 selama tersambung. Klik **Putuskan** untuk kembali ke kamera dan
+mikrofon laptop. Keadaan sambungan (fps video, mikrofon, pesan terakhir)
+tampil di bawah kolom ESP32. Kalau Wi-Fi putus sebentar, laptop menyambung ulang
+sendiri.
 
 ---
 
@@ -389,8 +427,8 @@ Rincian tiap frame juga ditulis ke `log/sesi_*.csv` supaya bisa dibuka di Excel.
 | `--kamera` | 0 | ganti kalau kamera yang kebuka salah |
 | `--frame-konfirmasi` / `--jendela-voting` | 8 / 12 | makin besar makin stabil, tapi makin lambat menerima huruf |
 | `--min-keyakinan` | 0.45 | naikkan kalau sering salah huruf |
-| `--jeda` | 1.2 detik | jarak minimal antar huruf |
-| `--ucap-setelah` | 2.5 detik | lama diam sebelum kata dibunyikan |
+| `--jeda` | 1.2 detik (percakapan: 2.7) | jarak minimal antar huruf, waktu berganti bentuk tangan |
+| `--ucap-setelah` | 2.5 detik (percakapan: 4.0) | lama diam sebelum kata dibunyikan; harus lebih lama dari `--jeda` |
 | `--spasi-setelah` | 2.0 detik | lama tangan hilang sebelum spasi ditambah |
 | `--bahasa` | id | `id` Indonesia, `en` Inggris |
 | `--pelan` | mati | suara dibaca lebih pelan |

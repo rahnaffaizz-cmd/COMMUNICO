@@ -156,8 +156,20 @@ class PengenalSuara:
 
             from siapkan_model_suara import MODEL, siapkan
 
-            sumber = str(siapkan(self.ukuran, self.lapor)) if self.ukuran in MODEL \
-                else self.ukuran
+            if self.ukuran not in MODEL:
+                sumber = self.ukuran
+            else:
+                try:
+                    sumber = str(siapkan(self.ukuran, self.lapor))
+                except Exception as e:  # noqa: BLE001 - konversi bisa gagal karena banyak hal
+                    # id-base perlu dikonversi pakai torch, yang bisa diblokir Smart
+                    # App Control di Windows. id-small sudah jadi, cukup diunduh.
+                    if self.ukuran == "id-small":
+                        raise
+                    self.lapor(f"Model '{self.ukuran}' gagal disiapkan ({e}). "
+                               "Beralih ke id-small ...")
+                    self.ukuran = "id-small"
+                    sumber = str(siapkan(self.ukuran, self.lapor))
             self.lapor(f"Memuat model suara '{self.ukuran}' ...")
             # device="cpu" dan int8: tidak butuh kartu grafis, dan memori kecil.
             self._model = WhisperModel(sumber, device="cpu", compute_type="int8",
@@ -250,6 +262,9 @@ class PendengarSuara(threading.Thread):
         self.pemotong = pemotong or PemotongUcapan()
         self.aktif = threading.Event()
         self.berhenti = threading.Event()
+        # Dinyalakan saat sumber mikrofon berganti (laptop <-> ESP32): mikrofon
+        # lama ditutup lalu buka_mikrofon dipanggil lagi, tanpa mematikan mode suara.
+        self.buka_ulang = threading.Event()
         self.keluar: queue.Queue = queue.Queue()
 
     def _titip(self, jenis: str, isi) -> None:
@@ -259,6 +274,7 @@ class PendengarSuara(threading.Thread):
         while not self.berhenti.is_set():
             if not self.aktif.wait(timeout=0.1):
                 continue
+            self.buka_ulang.clear()
             try:
                 self._dengarkan()
             except Exception as e:  # noqa: BLE001 - ditampilkan, bukan ditelan
@@ -280,7 +296,8 @@ class PendengarSuara(threading.Thread):
         abaikan_detik = 0.0
         sebelumnya_bicara = False
         try:
-            while self.aktif.is_set() and not self.berhenti.is_set():
+            while (self.aktif.is_set() and not self.berhenti.is_set()
+                   and not self.buka_ulang.is_set()):
                 potongan = mik.ambil(0.1)
                 if potongan is None:
                     continue

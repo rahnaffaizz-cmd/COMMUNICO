@@ -17,4 +17,5 @@ pandas==2.2.3             # hanya dipakai evaluasi.py, program utama tidak butuh
 faster-whisper==1.2.1
 av==18.1.0                # av 19 tidak cocok dengan faster-whisper 1.2.1
 sounddevice==0.5.6        # membaca mikrofon
+uv                        # dipakai siapkan_model_suara.py untuk mengonversi model id-base
 click==8.1.8              # gTTS butuh click di bawah 8.2; dikunci supaya tidak naik

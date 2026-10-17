@@ -26,8 +26,11 @@ desktop.ini
 # --- Data untuk evaluasi -----------------------------------------------------
 # Berkas ini besar (23 MB) dan diunduh otomatis oleh evaluasi.py saat pertama
 # dipakai, jadi tidak perlu ikut disimpan di repo.
-data/
+data/*
 model_suara/
+# Kecuali rekaman tangan sendiri (optimasi.py / rekam.py): tidak bisa dibuat
+# ulang tanpa merekam lagi, jadi ikut disimpan.
+!data/data_pengguna.csv
 
 # --- Hasil sementara ---------------------------------------------------------
 # Suara gTTS sebenarnya disimpan di folder TEMP sistem, tapi kalau ada yang

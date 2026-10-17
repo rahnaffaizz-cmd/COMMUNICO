@@ -23,8 +23,9 @@
 #   .\run.ps1 -Optimasi K H P --verifikasi   beberapa huruf, lalu ukur lagi dan bandingkan
 #
 # Percakapan dua sisi: isyarat di kiri, lawan bicara mengetik di kanan
-#   .\run.ps1 -Percakapan           semua pilihan di atas ikut berlaku, misalnya
-#   .\run.ps1 -Percakapan --tanpa-suara
+#   .\run.ps1 -Percakapan           pakai webcam laptop (kamera 0)
+#   .\run.ps1 -Percakapan --tanpa-suara          semua pilihan di atas ikut berlaku
+#   .\run.ps1 -Percakapan --esp32 192.168.1.50   kamera, mikrofon, dan OLED dari ESP32-CAM
 #
 # Menguji tanpa kamera
 #   .\run.ps1 -Uji                  pakai gambar di folder contoh

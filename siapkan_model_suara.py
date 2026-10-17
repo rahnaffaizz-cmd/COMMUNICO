@@ -116,12 +116,26 @@ def _unduh(info: dict, tujuan: Path, lapor) -> None:
         shutil.copytree(Path(unduhan) / info["subfolder"], tujuan)
 
 
-def _konversi(info: dict, tujuan: Path, lapor) -> None:
+def _cari_uv() -> str | None:
+    """Cari uv di PATH, lalu di folder Scripts milik Python yang sedang jalan.
+
+    run.ps1 memanggil .venv\\Scripts\\python.exe tanpa mengaktifkan .venv, jadi
+    uv yang dipasang lewat `pip install uv` tidak ada di PATH.
+    """
     uv = shutil.which("uv")
+    if uv:
+        return uv
+    lokal = Path(sys.executable).parent / ("uv.exe" if sys.platform == "win32" else "uv")
+    return str(lokal) if lokal.exists() else None
+
+
+def _konversi(info: dict, tujuan: Path, lapor) -> None:
+    uv = _cari_uv()
     if not uv:
         raise RuntimeError(
             "Konversi model butuh `uv` (https://docs.astral.sh/uv/) dan tidak ditemukan.\n"
-            "Pasang uv, atau pakai model yang tidak perlu konversi: --model-ucapan id-small")
+            "Pasang dengan: .\\.venv\\Scripts\\python.exe -m pip install uv\n"
+            "atau pakai model yang tidak perlu konversi: --model-ucapan id-small")
 
     with tempfile.TemporaryDirectory(dir=FOLDER_MODEL) as sementara:
         venv = Path(sementara) / "venv"
@@ -132,9 +146,10 @@ def _konversi(info: dict, tujuan: Path, lapor) -> None:
                    "transformers<5", "torch", "sentencepiece"])
 
         lapor(f"Mengonversi {info['repo']} ke format CTranslate2 (int8) ...")
-        konverter = venv / ("Scripts/ct2-transformers-converter.exe"
-                            if sys.platform == "win32" else "bin/ct2-transformers-converter")
-        _jalankan([str(konverter), "--model", info["repo"], "--revision", info["revisi"],
+        # Lewat `python -m`, bukan ct2-transformers-converter.exe: pembuka .exe
+        # yang baru diunduh bisa diblokir Smart App Control di Windows.
+        _jalankan([str(py), "-m", "ctranslate2.converters.transformers",
+                   "--model", info["repo"], "--revision", info["revisi"],
                    "--output_dir", str(tujuan), "--quantization", "int8",
                    "--copy_files", "tokenizer.json", "preprocessor_config.json"])
 
