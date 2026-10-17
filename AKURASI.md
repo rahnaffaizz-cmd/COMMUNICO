@@ -170,7 +170,7 @@ U 0.19
 O 0.08
 ```
 
-**J tidak muncul sama sekali di tiga besar.** Ambang I kemudian diturunkan ke
+**J tidak muncul sama ssekali di tiga besar.** Ambang I kemudian diturunkan ke
 **0,30** berdasarkan bukti itu, dan alasannya dicatat di dalam
 `ambang_huruf.json`.
 
