@@ -5,6 +5,8 @@
 #   .\run.ps1 --kamera 1            kalau kamera yang kebuka salah
 #   .\run.ps1 --bahasa en --pelan   suara bahasa Inggris, dibaca pelan
 #   .\run.ps1 --tanpa-eja-huruf     cuma kata yang dibunyikan, hurufnya tidak
+#   .\run.ps1 --tanpa-koreksi       huruf masuk apa adanya, tanpa koreksi kata
+#                                   dari kamus_kata.txt (TAB = pakai saran, U = batal)
 #
 # Kalau hurufnya susah masuk atau malah salah masuk
 #   .\run.ps1 --min-keyakinan 0.6   lebih ketat, biar tidak gampang salah huruf

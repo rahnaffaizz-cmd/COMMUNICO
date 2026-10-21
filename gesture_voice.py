@@ -21,6 +21,8 @@ Tombol saat jendela kamera terbuka:
     C          hapus semua teks
     SPASI      tambah spasi
     ENTER      ucapkan teks sekarang juga
+    TAB        pakai saran kata teratas (tampil di atas kotak TEKS)
+    U          batalkan koreksi kata terakhir
     P          nyalakan / matikan ucap otomatis
     1-9        ganti model secara langsung, lihat bar MODEL di pojok kiri atas
 
@@ -54,6 +56,7 @@ import numpy as np
 
 from catatan import Pencatat
 from fitur import ambil_fitur, sesuaikan_untuk
+from kamus import PengoreksiKata
 from pengukur import PengukurHuruf, StatistikSesi
 
 # Dua peringatan ini cuma berisik di layar, tidak bikin program rusak.
@@ -455,6 +458,9 @@ def baca_argumen() -> argparse.Namespace:
     p.add_argument("--ambang-seragam", action="store_true",
                    help="abaikan ambang_huruf.json, pakai --min-keyakinan untuk "
                         "semua huruf. Huruf yang biasanya ditolak jadi ikut masuk")
+    p.add_argument("--tanpa-koreksi", action="store_true",
+                   help="jangan koreksi kata dengan kamus_kata.txt. Saran juga "
+                        "tidak ditampilkan, huruf masuk apa adanya")
     p.add_argument("--jeda-ringkasan", type=float, default=20.0,
                    help="tiap berapa detik ringkasan berjalan dicatat ke log")
     p.add_argument("--tanpa-catatan", action="store_true",
@@ -512,7 +518,7 @@ def gambar_bar_model(frame, daftar: list[str], aktif: str) -> None:
 def gambar_tampilan(frame, *, mode, tebakan, keyakinan, huruf_voting, kemajuan_voting,
                     teks, sedang_bicara, hitung_mundur, ucap_setelah, auto_ucap,
                     titik_tangan, mp_gambar, mp_tangan, tiga_besar=(),
-                    daftar_model=(), model_aktif=""):
+                    daftar_model=(), model_aktif="", saran=()):
     """Tulis semua info ke atas gambar kamera."""
     tinggi, lebar = frame.shape[:2]
 
@@ -554,6 +560,11 @@ def gambar_tampilan(frame, *, mode, tebakan, keyakinan, huruf_voting, kemajuan_v
         cv2.putText(frame, f"{h} {nilai:.2f}", (lebar - 110, 35 + geser + baris * 24),
                     HURUF_FONT, 0.6, warna, 2 if baris == 0 else 1)
 
+    # Saran kata dari kamus, tepat di atas kotak teks.
+    if saran:
+        cv2.putText(frame, "saran: " + "  ".join(saran) + "   (TAB pakai)",
+                    (20, tinggi - 106), HURUF_FONT, 0.6, KUNING, 2)
+
     # Kotak gelap di bawah untuk teks yang sudah terkumpul.
     cv2.rectangle(frame, (0, tinggi - 96), (lebar, tinggi), GELAP, -1)
     tampil = teks if len(teks) < 40 else "..." + teks[-37:]
@@ -575,7 +586,7 @@ def gambar_tampilan(frame, *, mode, tebakan, keyakinan, huruf_voting, kemajuan_v
         cv2.putText(frame, "ucap otomatis MATI (tekan P)", (20, tinggi - 26),
                     HURUF_FONT, 0.55, ABU, 1)
 
-    bantuan = "Q keluar  BKSP hapus  C bersih  SPASI _  ENTER ucap  P otomatis"
+    bantuan = "Q keluar  BKSP hapus  C bersih  SPASI _  ENTER ucap  P otomatis  TAB saran"
     if len(daftar_model) > 1:
         bantuan += "  1-9 ganti model"
     cv2.putText(frame, bantuan, (lebar - 600, tinggi - 8), HURUF_FONT, 0.45, ABU, 1)
@@ -629,6 +640,10 @@ def utama() -> int:
                     else muat_ambang_huruf(catat, arg.model))
 
     pengucap = Pengucap(bahasa=arg.bahasa, pelan=arg.pelan, catat=catat)
+    # Ambang per huruf tetap dibaca walau --ambang-seragam, karena kamus perlu
+    # tahu huruf mana yang biasanya ditolak (huruf itu sering terlewat dari kata).
+    kamus = PengoreksiKata.muat(muat_ambang_huruf(nama_model=arg.model),
+                                aktif=not arg.tanpa_koreksi, catat=catat)
     voting = VotingHuruf(arg.jendela_voting, arg.frame_konfirmasi,
                          arg.min_keyakinan, arg.jeda, catat=catat,
                          ambang_huruf=ambang_huruf)
@@ -740,6 +755,7 @@ def utama() -> int:
                 urut = np.argsort(peluang)[::-1][:3]
                 tiga_besar = [(model.classes_[i], float(peluang[i])) for i in urut]
                 catat.tebakan(tebakan, keyakinan, tiga_besar[1:])
+                kamus.catat_frame(model.classes_, peluang)
 
                 if pengukur is not None:
                     # Semua frame direkam apa adanya, termasuk yang salah, supaya
@@ -758,6 +774,7 @@ def utama() -> int:
                 huruf_diterima = voting.masukkan(tebakan, keyakinan, sekarang)
                 if huruf_diterima:
                     teks += huruf_diterima
+                    kamus.huruf_masuk(huruf_diterima, teks)
                     waktu_huruf_terakhir = sekarang
                     statistik.catat_diterima(huruf_diterima)
                     catat.huruf_diterima(huruf_diterima, teks)
@@ -767,12 +784,13 @@ def utama() -> int:
                 # Tangan hilang dari layar: voting direset, dan kalau lama
                 # menghilang berarti satu kata sudah selesai, jadi diberi spasi.
                 voting.kosongkan()
+                kamus.lupakan_frame()
                 if sejak_tangan_hilang is None:
                     sejak_tangan_hilang = sekarang
                     catat.rinci("TANGAN", "tangan hilang dari layar")
                 elif (sekarang - sejak_tangan_hilang >= arg.spasi_setelah
                       and teks and not teks.endswith(" ")):
-                    teks += " "
+                    teks = kamus.akhiri_kata(teks) + " "
                     catat.teks_berubah("spasi ditambah otomatis", teks)
 
             hitung_mundur = max(0.0, arg.ucap_setelah - (sekarang - waktu_huruf_terakhir))
@@ -784,6 +802,7 @@ def utama() -> int:
                 and not pengucap.sibuk
             )
             if sudah_waktunya:
+                teks = kamus.akhiri_kata(teks)
                 pengucap.ucapkan(teks)
                 teks = ""
                 waktu_huruf_terakhir = float("-inf")
@@ -798,6 +817,7 @@ def utama() -> int:
                 mp_gambar=mp_gambar, mp_tangan=mp_tangan,
                 tiga_besar=tiga_besar,
                 daftar_model=daftar_nama_model, model_aktif=nama_model_aktif,
+                saran=kamus.saran(teks),
             )
 
             if pengukur is not None:
@@ -819,12 +839,17 @@ def utama() -> int:
                 catat.teks_berubah("teks dikosongkan", teks)
             elif tombol == ord(" "):                # Spasi
                 if teks and not teks.endswith(" "):
-                    teks += " "
+                    teks = kamus.akhiri_kata(teks) + " "
                     catat.teks_berubah("spasi ditambah manual", teks)
             elif tombol in (13, 10):                # Enter
+                teks = kamus.akhiri_kata(teks)
                 pengucap.ucapkan(teks)
                 teks = ""
                 waktu_huruf_terakhir = float("-inf")
+            elif tombol == 9:                       # TAB: pakai saran teratas
+                teks = kamus.pakai_saran(teks)
+            elif tombol == ord("u"):                # U: batalkan koreksi kata
+                teks = kamus.batalkan(teks)
             elif tombol == ord("p"):                # P
                 auto_ucap = not auto_ucap
                 catat.kabar("ATUR", f"ucap otomatis {'menyala' if auto_ucap else 'mati'}")

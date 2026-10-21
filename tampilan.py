@@ -348,13 +348,15 @@ class KotakSusun(tk.Canvas):
         super().__init__(induk, bg=latar_induk, highlightthickness=0, bd=0, height=tinggi)
         self._teks = ""
         self._sisa: float | None = None          # 0..1 menuju terkirim otomatis
+        self._saran: tuple[str, ...] = ()        # saran kata dari kamus.py
         self.font = tkfont.Font(font=huruf(26, "bold"))
         self.bind("<Configure>", lambda _e: self._gambar())
 
-    def atur(self, teks: str, kemajuan: float | None) -> None:
-        if teks == self._teks and kemajuan == self._sisa:
+    def atur(self, teks: str, kemajuan: float | None, saran=()) -> None:
+        saran = tuple(saran)
+        if teks == self._teks and kemajuan == self._sisa and saran == self._saran:
             return
-        self._teks, self._sisa = teks, kemajuan
+        self._teks, self._sisa, self._saran = teks, kemajuan, saran
         self._gambar()
 
     def _gambar(self) -> None:
@@ -363,10 +365,18 @@ class KotakSusun(tk.Canvas):
         if lebar < 10:
             return
         kotak_bulat(self, 1, 1, lebar - 2, tinggi - 2, 12, fill=PUTIH, outline=GARIS)
+        if self._saran:
+            # Saran di kanan, teks yang diketik mengalah ke kiri.
+            keterangan = "saran: " + "  ".join(self._saran) + "  (F9)"
+            self.create_text(lebar - 16, tinggi / 2, text=keterangan, anchor="e",
+                             font=huruf(13), fill=REDUP)
+            lebar_teks = lebar - tkfont.Font(font=huruf(13)).measure(keterangan) - 24
+        else:
+            lebar_teks = lebar
         if self._teks:
             teks = self._teks
             # Teks panjang: tampilkan ujungnya saja, yang sedang diketik.
-            while len(teks) > 1 and self.font.measure(teks) > lebar - 50:
+            while len(teks) > 1 and self.font.measure(teks) > lebar_teks - 50:
                 teks = teks[1:]
             self.create_text(16, tinggi / 2, text=teks, anchor="w", font=self.font, fill=TEKS)
             x = 16 + self.font.measure(teks) + 3

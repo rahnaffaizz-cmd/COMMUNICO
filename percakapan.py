@@ -35,6 +35,12 @@ Tombol (selain tombol di layar):
     F6   suara menyala / mati
     F7   lawan bicara berganti antara ketik dan suara
     F8   bersihkan percakapan di layar (catatan di log/ tetap lengkap)
+    F9   pakai saran kata teratas (tampil di kanan kotak teks isyarat)
+    CTRL+Z  batalkan koreksi kata terakhir
+
+Kata yang dieja dicocokkan dengan kamus_kata.txt (lihat kamus.py). Kalau satu
+huruf salah terbaca, kata itu diganti dengan kata kamus terdekat begitu kata
+selesai. Matikan dengan --tanpa-koreksi.
 
 Pesan isyarat terkirim sendiri kalau tidak ada huruf baru selama --ucap-setelah
 detik (bawaan 4). Antar huruf diberi jeda --jeda detik (bawaan 2,7) supaya
@@ -135,8 +141,9 @@ class PenyusunTeks:
 
     def __init__(self, model, voting, catat, *, ucap_setelah: float,
                  spasi_setelah: float, tahan_tangan_hilang: int,
-                 kirim_otomatis: bool = True):
+                 kirim_otomatis: bool = True, kamus=None):
         self.model = model
+        self.kamus = kamus                    # PengoreksiKata, boleh kosong
         self.voting = voting
         self.catat = catat
         self.ucap_setelah = ucap_setelah
@@ -180,21 +187,27 @@ class PenyusunTeks:
             tertinggi = int(np.argmax(peluang))
             tebakan = str(self.model.classes_[tertinggi])
             keyakinan = float(peluang[tertinggi])
+            if self.kamus:
+                self.kamus.catat_frame(self.model.classes_, peluang)
 
             diterima = self.voting.masukkan(tebakan, keyakinan, sekarang)
             if diterima:
                 self.teks += diterima
+                if self.kamus:
+                    self.kamus.huruf_masuk(diterima, self.teks)
                 self._waktu_huruf = sekarang
                 self.catat.huruf_diterima(diterima, self.teks)
                 kejadian.append(("huruf", diterima))
         else:
             # Tangan hilang dari layar. Kalau lama, satu kata dianggap selesai.
             self.voting.kosongkan()
+            if self.kamus:
+                self.kamus.lupakan_frame()
             if self._sejak_hilang is None:
                 self._sejak_hilang = sekarang
             elif (sekarang - self._sejak_hilang >= self.spasi_setelah
                   and self.teks and not self.teks.endswith(" ")):
-                self.teks += " "
+                self.teks = self._akhiri_kata() + " "
                 self.catat.teks_berubah("spasi ditambah otomatis", self.teks)
 
         sisa = max(0.0, self.ucap_setelah - (sekarang - self._waktu_huruf))
@@ -208,6 +221,7 @@ class PenyusunTeks:
             "mode": mode, "tebakan": tebakan, "keyakinan": keyakinan,
             "tangan": jumlah_tangan, "huruf_unggul": huruf_unggul,
             "kemajuan": kemajuan, "teks": self.teks,
+            "saran": self.kamus.saran(self.teks) if self.kamus else [],
             # None kalau tidak ada yang menunggu terkirim.
             "sisa": sisa if self.teks.strip() and self._waktu_huruf != TANPA_WAKTU
             else None,
@@ -215,9 +229,12 @@ class PenyusunTeks:
         }
         return status, kejadian
 
+    def _akhiri_kata(self) -> str:
+        return self.kamus.akhiri_kata(self.teks) if self.kamus else self.teks
+
     def kirim(self) -> str:
         """Ambil teks sekarang sebagai satu pesan, lalu kosongkan."""
-        hasil = self.teks.strip()
+        hasil = self._akhiri_kata().strip()
         self.teks = ""
         self._waktu_huruf = TANPA_WAKTU
         return hasil
@@ -233,8 +250,12 @@ class PenyusunTeks:
             self.teks = ""
             self.catat.teks_berubah("teks dikosongkan", self.teks)
         elif nama == "spasi" and self.teks and not self.teks.endswith(" "):
-            self.teks += " "
+            self.teks = self._akhiri_kata() + " "
             self.catat.teks_berubah("spasi ditambah manual", self.teks)
+        elif nama == "saran" and self.kamus:
+            self.teks = self.kamus.pakai_saran(self.teks)
+        elif nama == "batal" and self.kamus:
+            self.teks = self.kamus.batalkan(self.teks)
         return None
 
 
@@ -745,6 +766,8 @@ class Aplikasi:
         self.akar.bind("<F7>", lambda _e: self._pilih_mode(
             "ketik" if self.mode.get() == "suara" else "suara"))
         self.akar.bind("<F8>", lambda _e: self.bersihkan_percakapan())
+        self.akar.bind("<F9>", lambda _e: self.pekerja.perintah.put("saran"))
+        self.akar.bind("<Control-z>", lambda _e: self.pekerja.perintah.put("batal"))
 
     # ---- pesan
     def tambah_pesan(self, pembicara: str, teks: str, via: str = "") -> None:
@@ -840,7 +863,7 @@ class Aplikasi:
                                    status["keyakinan"] if tebakan else None)
             kemajuan = (None if status["sisa"] is None
                         else 1.0 - status["sisa"] / status["ucap_setelah"])
-            self.sedang.atur(status["teks"], kemajuan)
+            self.sedang.atur(status["teks"], kemajuan, status.get("saran", []))
         if ppm is not None:
             self._gambar_sekarang = tk.PhotoImage(data=ppm, format="PPM")
             self.video.tampilkan(self._gambar_sekarang)
@@ -888,6 +911,8 @@ def baca_argumen(argv=None) -> argparse.Namespace:
                    default=pengaturan_deteksi["min_tracking_confidence"])
     p.add_argument("--ambang-seragam", action="store_true",
                    help="abaikan ambang per huruf, pakai --min-keyakinan untuk semua")
+    p.add_argument("--tanpa-koreksi", action="store_true",
+                   help="jangan koreksi kata dengan kamus_kata.txt")
     p.add_argument("--model-ucapan", default="id-base",
                    help="model pengenal suara (CPU, int8). id-base/id-small disetel "
                         "untuk bahasa Indonesia; untuk bahasa lain pakai tiny/base/small/medium")
@@ -929,9 +954,13 @@ def utama() -> int:
     ambang = {} if arg.ambang_seragam else gv.muat_ambang_huruf(catat, arg.model)
     voting = gv.VotingHuruf(arg.jendela_voting, arg.frame_konfirmasi, arg.min_keyakinan,
                             arg.jeda, catat=catat, ambang_huruf=ambang)
+    from kamus import PengoreksiKata
+    kamus = PengoreksiKata.muat(gv.muat_ambang_huruf(nama_model=arg.model),
+                                aktif=not arg.tanpa_koreksi, catat=catat)
     penyusun = PenyusunTeks(model, voting, catat, ucap_setelah=arg.ucap_setelah,
                             spasi_setelah=arg.spasi_setelah,
-                            tahan_tangan_hilang=arg.tahan_tangan_hilang)
+                            tahan_tangan_hilang=arg.tahan_tangan_hilang,
+                            kamus=kamus)
 
     def buka_kamera_laptop():
         kamera = (cv2.VideoCapture(arg.kamera, cv2.CAP_DSHOW) if gv.WINDOWS
