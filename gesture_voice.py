@@ -108,12 +108,19 @@ def cari_pemutar() -> list[str] | None:
     return None
 
 
+# Batas waktu satu unduhan Google TTS. Tanpa batas, satu kata yang macet di
+# jaringan pernah menahan semua suara berikutnya sampai 44 detik.
+BATAS_UNDUH_TTS = 6.0
+
+
 class Pengucap:
     """Tukang bicara. Jalan di thread sendiri supaya video tidak ikut macet.
 
     Setiap teks diubah jadi file mp3 oleh Google TTS, lalu diputar lewat
     pemutar bawaan Windows. File mp3-nya disimpan (di-cache) supaya kata yang
-    sama tidak perlu diunduh ulang.
+    sama tidak perlu diunduh ulang. Mengunduh itulah yang lama (1 sampai 40
+    detik, tergantung internet), memutar dari simpanan cuma sekitar 1 detik.
+    Karena itu siapkan() mengunduh daftar kata lebih dulu di latar belakang.
     """
 
     def __init__(self, bahasa: str = "id", pelan: bool = False, catat=None):
@@ -136,6 +143,47 @@ class Pengucap:
         self._thread = threading.Thread(target=self._jalan, daemon=True)
         self._thread.start()
 
+    def siapkan(self, daftar: list[str]) -> None:
+        """Unduh suara untuk daftar kata di latar belakang, sebelum dibutuhkan.
+
+        Kata yang sudah tersimpan dilewati, jadi hanya lama sekali saja. Kalau
+        internet mati, berhenti diam-diam setelah beberapa kali gagal.
+        """
+        def kerja():
+            baru, gagal_beruntun = 0, 0
+            for teks in daftar:
+                teks = teks.strip().lower()
+                klip = self._path_klip(teks)
+                if not teks or klip.exists():
+                    continue
+                if self._unduh(teks, klip):
+                    baru, gagal_beruntun = baru + 1, 0
+                else:
+                    gagal_beruntun += 1
+                    if gagal_beruntun >= 3:
+                        break
+            if self.catat and (baru or gagal_beruntun):
+                self.catat.kabar("SUARA", f"{baru} suara kata disiapkan lebih dulu"
+                                 + (", berhenti karena Google TTS tidak bisa dihubungi"
+                                    if gagal_beruntun >= 3 else ""))
+
+        threading.Thread(target=kerja, daemon=True).start()
+
+    def _unduh(self, teks: str, path: Path) -> bool:
+        """Unduh mp3 dari Google TTS, dengan batas waktu. Ditulis ke berkas
+        sementara dulu supaya dua thread tidak menulis berkas yang sama."""
+        from gtts import gTTS
+
+        sementara = path.with_name(f"{path.stem}.{threading.get_ident()}.tmp")
+        try:
+            gTTS(text=teks, lang=self.bahasa, slow=self.pelan,
+                 timeout=BATAS_UNDUH_TTS).save(str(sementara))
+            sementara.replace(path)
+            return True
+        except Exception:  # noqa: BLE001 - biasanya masalah internet
+            sementara.unlink(missing_ok=True)
+            return False
+
     def _path_klip(self, teks: str) -> Path:
         """Nama file dibuat dari sidik jari teksnya, jadi tiap kata punya file sendiri."""
         sidik = hashlib.md5(
@@ -145,23 +193,19 @@ class Pengucap:
 
     def _buat_suara(self, teks: str, path: Path) -> bool:
         """Minta Google TTS bikin file mp3. Balik False kalau gagal (misal tidak ada internet)."""
-        from gtts import gTTS
-
         mulai = time.monotonic()
-        try:
-            gTTS(text=teks, lang=self.bahasa, slow=self.pelan).save(str(path))
+        if self._unduh(teks, path):
             if self.catat:
                 self.catat.suara_unduh(teks, time.monotonic() - mulai)
             return True
-        except Exception as e:  # noqa: BLE001 - biasanya masalah internet
-            if self.catat:
-                self.catat.suara_gagal(teks, str(e))
-            if not self._sudah_pernah_lapor:
-                print(f"Google TTS tidak bisa dihubungi ({e}). Suara dimatikan "
-                      f"sampai internet kembali. Kata yang sudah tersimpan tetap bisa dibunyikan.")
-                self._sudah_pernah_lapor = True
-            path.unlink(missing_ok=True)
-            return False
+        if self.catat:
+            self.catat.suara_gagal(teks, f"Google TTS tidak menjawab dalam "
+                                         f"{BATAS_UNDUH_TTS:.0f} detik atau internet mati")
+        if not self._sudah_pernah_lapor:
+            print("Google TTS tidak bisa dihubungi. Kata yang belum tersimpan dilewati, "
+                  "kata yang sudah tersimpan tetap bisa dibunyikan.")
+            self._sudah_pernah_lapor = True
+        return False
 
     def _putar(self, path: Path) -> None:
         """Putar file mp3 sampai selesai, dengan cara yang sesuai sistemnya."""
@@ -212,7 +256,9 @@ class Pengucap:
 
     def ucapkan(self, teks: str) -> None:
         """Titip teks untuk diucapkan. Kalau masih bicara, permintaan diabaikan."""
-        teks = teks.strip()
+        # Huruf kecil: Google membaca "MAKAN" huruf besar bisa seperti singkatan,
+        # dan simpanan dari siapkan() juga memakai huruf kecil.
+        teks = teks.strip().lower()
         if teks and not self._sedang_bicara.is_set():
             if self.catat:
                 self.catat.suara_minta(teks)
@@ -644,6 +690,7 @@ def utama() -> int:
     # tahu huruf mana yang biasanya ditolak (huruf itu sering terlewat dari kata).
     kamus = PengoreksiKata.muat(muat_ambang_huruf(nama_model=arg.model),
                                 aktif=not arg.tanpa_koreksi, catat=catat)
+    pengucap.siapkan(list("ABCDEFGHIJKLMNOPQRSTUVWXYZ") + list(kamus.peringkat))
     voting = VotingHuruf(arg.jendela_voting, arg.frame_konfirmasi,
                          arg.min_keyakinan, arg.jeda, catat=catat,
                          ambang_huruf=ambang_huruf)

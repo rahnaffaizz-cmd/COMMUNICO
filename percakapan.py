@@ -991,6 +991,8 @@ def utama() -> int:
             mp_gambar.draw_landmarks(frame, tangan, mp_tangan.HAND_CONNECTIONS)
 
     pengucap = gv.Pengucap(bahasa=arg.bahasa, pelan=arg.pelan, catat=catat)
+    if not arg.tanpa_suara:
+        pengucap.siapkan(list("ABCDEFGHIJKLMNOPQRSTUVWXYZ") + list(kamus.peringkat))
     riwayat = Riwayat(simpan=not arg.tanpa_catatan)
 
     # Pengenal suara tidak memuat apa-apa sampai mode suara pertama kali dinyalakan.
