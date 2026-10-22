@@ -162,12 +162,30 @@ def tulis_ambang(y, tebak, yakin, sah, berkas_model: Path, target: float = 0.80)
         ambang[huruf] = nilai
 
     berkas = berkas_model.with_name(f"ambang_{berkas_model.stem}.json")
-    berkas.write_text(json.dumps({
+
+    # Ambang yang disetel manual dari uji kamera (punya alasan di
+    # catatan_penyetelan) tidak ditimpa angka dataset. Dataset sudah beberapa
+    # kali terbukti keliru, misalnya I yang selalu jadi J di dataset padahal
+    # terbaca baik di kamera pengguna.
+    catatan = {}
+    if berkas.exists():
+        lama = json.loads(berkas.read_text(encoding="utf-8"))
+        catatan = lama.get("catatan_penyetelan", {})
+        for huruf in catatan:
+            if huruf in lama.get("ambang", {}):
+                print(f"  Ambang {huruf} dipertahankan {lama['ambang'][huruf]} "
+                      f"(disetel manual, hitungan dataset {ambang.get(huruf)})")
+                ambang[huruf] = lama["ambang"][huruf]
+
+    isi = {
         "target_presisi": target * 100,
         "ambang": ambang,
         "keterangan": (f"Ambang untuk {berkas_model.name}, dihitung latih_cabang.py "
                        f"dari tebakan per foto asli. {AMBANG_MENYERAH} berarti ditolak."),
-    }, indent=2), encoding="utf-8")
+    }
+    if catatan:
+        isi["catatan_penyetelan"] = catatan
+    berkas.write_text(json.dumps(isi, indent=2, ensure_ascii=False), encoding="utf-8")
     ditolak = " ".join(h for h, v in ambang.items() if v >= AMBANG_MENYERAH) or "-"
     print(f"  Ambang ditulis ke {berkas.name}. Huruf yang ditolak: {ditolak}")
 

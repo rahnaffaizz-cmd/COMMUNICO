@@ -9,7 +9,7 @@
     "F": 0.2,
     "G": 0.2,
     "H": 0.2,
-    "I": 0.99,
+    "I": 0.3,
     "J": 0.31,
     "K": 0.2,
     "L": 0.37,
@@ -28,5 +28,8 @@
     "Y": 0.2,
     "Z": 0.2
   },
-  "keterangan": "Ambang untuk rf_bisindo_v7.pkl, dihitung latih_cabang.py dari tebakan per foto asli. 0.99 berarti ditolak."
+  "keterangan": "Ambang untuk rf_bisindo_v7.pkl, dihitung latih_cabang.py dari tebakan per foto asli. 0.99 berarti ditolak.",
+  "catatan_penyetelan": {
+    "I": "Disetel manual 2026-10-22. Dari dataset I selalu kalah oleh J (J = I yang digerakkan) sehingga dihitung 0.99, tapi di kamera pengguna I terbaca sebagai tebakan teratas dan cuma tertolak ambang. Sama dengan penyetelan 2026-09-13 di ambang_huruf.json. latih_cabang.py mempertahankan huruf yang tercantum di sini."
+  }
 }
