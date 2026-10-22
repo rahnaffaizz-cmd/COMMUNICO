@@ -3,10 +3,10 @@
   "ambang": {
     "A": 0.2,
     "B": 0.2,
-    "C": 0.2,
+    "C": 0.38,
     "D": 0.2,
     "E": 0.2,
-    "F": 0.48,
+    "F": 0.2,
     "G": 0.2,
     "H": 0.2,
     "I": 0.99,
@@ -14,19 +14,19 @@
     "K": 0.2,
     "L": 0.37,
     "M": 0.36,
-    "N": 0.65,
+    "N": 0.59,
     "O": 0.2,
     "P": 0.2,
     "Q": 0.2,
     "R": 0.2,
     "S": 0.2,
-    "T": 0.2,
-    "U": 0.34,
+    "T": 0.31,
+    "U": 0.33,
     "V": 0.2,
     "W": 0.2,
     "X": 0.2,
     "Y": 0.2,
-    "Z": 0.34
+    "Z": 0.2
   },
   "keterangan": "Ambang untuk rf_bisindo_v7.pkl, dihitung latih_cabang.py dari tebakan per foto asli. 0.99 berarti ditolak."
 }
