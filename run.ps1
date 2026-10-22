@@ -64,5 +64,15 @@ if (-not $py) {
     exit 1
 }
 
+# Pilihan run.ps1 diawali satu strip (-Percakapan), pilihan Python dua strip
+# (--kamera). Satu strip yang tidak dikenal hampir pasti salah ketik, misalnya
+# -perckapan, dan kalau diteruskan ke Python hanya muncul pesan usage yang membingungkan.
+$salah = @($Args | Where-Object { "$_" -match '^-[A-Za-z]{2,}$' })
+if ($salah.Count -gt 0) {
+    Write-Host "Pilihan tidak dikenal: $($salah -join ', ')" -ForegroundColor Red
+    Write-Host "Yang tersedia: -Percakapan, -Optimasi, -Uji (pilihan Python pakai dua strip, misalnya --kamera 1)"
+    exit 1
+}
+
 $skrip = if ($Uji) { "uji_gambar.py" } elseif ($Percakapan) { "percakapan.py" } elseif ($Optimasi) { "optimasi.py" } else { "gesture_voice.py" }
 & $py $skrip @Args
