@@ -13,11 +13,12 @@ itu keluar dari cabang tersebut.
 Pengujian pakai pembagian per foto asli (lihat evaluasi.py), jadi angkanya
 jujur. Rekaman sendiri dari rekam.py (data/data_pengguna.csv) ikut dipakai.
 
-Tiap sampel juga diberi salinan tiruan tangan anak (tangan_anak.py), bawaannya
-1 salinan. Salinan hanya dipakai melatih, tidak pernah ikut diuji, dan selalu
-berada di lipatan yang sama dengan sampel asalnya.
-    python latih_cabang.py --anak 0        tanpa salinan anak (seperti sebelumnya)
-    python latih_cabang.py --anak 2        2 salinan per sampel
+Salinan tiruan tangan anak (tangan_anak.py) bisa ditambahkan dengan --anak N.
+Salinan hanya dipakai melatih, tidak pernah ikut diuji, dan selalu berada di
+lipatan yang sama dengan sampel asalnya. Bawaannya MATI: diuji 2026-10-23,
+1 salinan menurunkan ketepatan sampel asli 91,2% -> 88,8% dan tiruan anak
+90,0% -> 88,5%, dengan L -29, R -20, Z -17 poin.
+    python latih_cabang.py --anak 1        1 salinan anak per sampel
 """
 
 from __future__ import annotations
@@ -272,7 +273,7 @@ def tulis_ambang(y, tebak, yakin, sah, berkas_model: Path, target: float = 0.80)
 def utama() -> int:
     p = argparse.ArgumentParser(description="Melatih model dua cabang (v7)")
     p.add_argument("--keluaran", type=Path, default=KELUARAN_BAWAAN)
-    p.add_argument("--anak", type=int, default=1, metavar="N",
+    p.add_argument("--anak", type=int, default=0, metavar="N",
                    help="salinan tiruan tangan anak per sampel (0 = tanpa)")
     arg = p.parse_args()
 
