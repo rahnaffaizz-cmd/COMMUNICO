@@ -12,6 +12,12 @@ itu keluar dari cabang tersebut.
 
 Pengujian pakai pembagian per foto asli (lihat evaluasi.py), jadi angkanya
 jujur. Rekaman sendiri dari rekam.py (data/data_pengguna.csv) ikut dipakai.
+
+Tiap sampel juga diberi salinan tiruan tangan anak (tangan_anak.py), bawaannya
+1 salinan. Salinan hanya dipakai melatih, tidak pernah ikut diuji, dan selalu
+berada di lipatan yang sama dengan sampel asalnya.
+    python latih_cabang.py --anak 0        tanpa salinan anak (seperti sebelumnya)
+    python latih_cabang.py --anak 2        2 salinan per sampel
 """
 
 from __future__ import annotations
@@ -29,6 +35,7 @@ from cabang import (HURUF_DUA_TANGAN, HURUF_SATU_TANGAN, ModelDuaCabang,  # noqa
                     dua_tangan_terlihat)
 from evaluasi import kelompokkan_per_foto, siapkan_data  # noqa: E402
 from fitur import ambil_fitur  # noqa: E402
+from tangan_anak import tiru_tangan_anak  # noqa: E402
 
 FOLDER = Path(__file__).resolve().parent
 BERKAS_PENGGUNA = FOLDER / "data" / "data_pengguna.csv"
@@ -101,6 +108,78 @@ def ukur(X, y, grup, bobot):
         print(f"    lipatan {nomor}: dua cabang {np.mean(tebak_cabang[uji] == y[uji]) * 100:6.2f}%"
               f"   satu cabang {np.mean(tebak_satu[uji] == y[uji]) * 100:6.2f}%")
     return tebak_cabang, tebak_satu, yakin_cabang
+
+
+# Salinan anak dibobot setengah dari sampel asalnya, supaya data asli tetap
+# lebih menentukan daripada tiruan.
+BOBOT_ANAK = 0.5
+
+
+def buat_salinan_anak(X_mentah, bobot, jumlah: int, benih: int):
+    """`jumlah` salinan tiruan anak per sampel. Mengembalikan fitur, indeks asal, bobot."""
+    rng = np.random.default_rng(benih)
+    asal = np.tile(np.arange(len(X_mentah)), jumlah)
+    X_anak = ambil_fitur(tiru_tangan_anak(X_mentah[asal], rng), urut_tangan=True)
+    return X_anak, asal, bobot[asal] * BOBOT_ANAK
+
+
+def ukur_anak(X, y, grup, bobot, X_anak, asal, bobot_anak, X_uji_anak):
+    """Bandingkan dua cabang tanpa dan dengan salinan anak, pada lipatan yang SAMA.
+
+    Diuji pada sampel asli dan pada tiruan anak dari sampel uji (benih lain dari
+    salinan latih, jadi bukan salinan yang sama).
+    """
+    from sklearn.model_selection import GroupKFold
+
+    n = len(y)
+    tebak = {k: np.empty(n, dtype=object) for k in ("polos", "anak", "polos_tiru", "anak_tiru")}
+    yakin_anak = np.zeros(n)
+    for nomor, (latih, uji) in enumerate(GroupKFold(5).split(X, y, groups=grup), 1):
+        polos = latih_dua_cabang(X[latih], y[latih], bobot[latih])
+        ikut = np.isin(asal, latih)
+        anak = latih_dua_cabang(np.vstack([X[latih], X_anak[ikut]]),
+                                np.concatenate([y[latih], y[asal[ikut]]]),
+                                np.concatenate([bobot[latih], bobot_anak[ikut]]))
+        for nama, model in (("polos", polos), ("anak", anak)):
+            for akhiran, data in (("", X[uji]), ("_tiru", X_uji_anak[uji])):
+                peluang = model.predict_proba(data)
+                tebak[nama + akhiran][uji] = model.classes_[peluang.argmax(axis=1)]
+                if nama == "anak" and not akhiran:
+                    yakin_anak[uji] = peluang.max(axis=1)
+        b = {k: np.mean(v[uji] == y[uji]) * 100 for k, v in tebak.items()}
+        print(f"    lipatan {nomor}: asli {b['polos']:6.2f}% -> {b['anak']:6.2f}%   "
+              f"tiruan anak {b['polos_tiru']:6.2f}% -> {b['anak_tiru']:6.2f}%")
+    return tebak, yakin_anak
+
+
+def laporkan_anak(X, y, tebak) -> None:
+    dua = dua_tangan_terlihat(X)
+    sah = ~((dua & np.isin(y, HURUF_SATU_TANGAN)) | (~dua & ~np.isin(y, HURUF_SATU_TANGAN)))
+
+    judul("HASIL SALINAN ANAK (pembagian per foto asli, sampel sesuai aturan)")
+    print("                         tanpa salinan   dengan salinan")
+    for label, akhiran in (("sampel asli", ""), ("tiruan tangan anak", "_tiru")):
+        a = np.mean((tebak["polos" + akhiran] == y)[sah]) * 100
+        b = np.mean((tebak["anak" + akhiran] == y)[sah]) * 100
+        print(f"  {label:<22} {a:10.2f}%   {b:10.2f}%   {b - a:+5.1f}")
+
+    print("\n  Tiap huruf pada tiruan anak (tanpa -> dengan), lalu sampel asli:")
+    for huruf in sorted(np.unique(y)):
+        p = (y == huruf) & sah
+        if not p.any():
+            continue
+        ta, tb = (np.mean(tebak[k][p] == huruf) * 100 for k in ("polos_tiru", "anak_tiru"))
+        aa, ab = (np.mean(tebak[k][p] == huruf) * 100 for k in ("polos", "anak"))
+        print(f"    {huruf}: tiruan {ta:6.2f}% -> {tb:6.2f}% {tb - ta:+6.1f}   "
+              f"asli {aa:6.2f}% -> {ab:6.2f}% {ab - aa:+6.1f}")
+
+    # Uji coba anak-anak memperlihatkan J, Z, U sering muncul padahal tidak
+    # diperagakan. Ini seberapa sering huruf lain terbaca sebagai huruf itu.
+    print("\n  Huruf LAIN pada tiruan anak yang salah terbaca sebagai:")
+    for huruf in "JZUE":
+        lain = (y != huruf) & sah
+        a, b = (np.mean(tebak[k][lain] == huruf) * 100 for k in ("polos_tiru", "anak_tiru"))
+        print(f"    {huruf}: {a:5.2f}% -> {b:5.2f}%")
 
 
 def laporkan(X, y, tebak_cabang, tebak_satu) -> None:
@@ -193,6 +272,8 @@ def tulis_ambang(y, tebak, yakin, sah, berkas_model: Path, target: float = 0.80)
 def utama() -> int:
     p = argparse.ArgumentParser(description="Melatih model dua cabang (v7)")
     p.add_argument("--keluaran", type=Path, default=KELUARAN_BAWAAN)
+    p.add_argument("--anak", type=int, default=1, metavar="N",
+                   help="salinan tiruan tangan anak per sampel (0 = tanpa)")
     arg = p.parse_args()
 
     import joblib
@@ -201,12 +282,26 @@ def utama() -> int:
     print(f"Data: {len(y)} sampel, {len(np.unique(y))} huruf")
     X = ambil_fitur(X_mentah, urut_tangan=True)
 
-    judul("MENGUKUR (5 lipatan per foto asli)")
-    tebak_cabang, tebak_satu, yakin_cabang = ukur(X, y, grup, bobot)
-    laporkan(X, y, tebak_cabang, tebak_satu)
+    if arg.anak > 0:
+        X_anak, asal, bobot_anak = buat_salinan_anak(X_mentah, bobot, arg.anak, benih=1)
+        X_uji_anak, _, _ = buat_salinan_anak(X_mentah, bobot, 1, benih=2)
+        print(f"Salinan tiruan anak: {len(X_anak)} sampel, bobot {BOBOT_ANAK} x asalnya")
 
-    judul("MELATIH MODEL AKHIR")
-    model = latih_dua_cabang(X, y, bobot)
+        judul("MENGUKUR (5 lipatan per foto asli, tanpa vs dengan salinan anak)")
+        tebak, yakin_cabang = ukur_anak(X, y, grup, bobot, X_anak, asal, bobot_anak, X_uji_anak)
+        laporkan_anak(X, y, tebak)
+        tebak_cabang = tebak["anak"]
+
+        judul("MELATIH MODEL AKHIR")
+        model = latih_dua_cabang(np.vstack([X, X_anak]), np.concatenate([y, y[asal]]),
+                                 np.concatenate([bobot, bobot_anak]))
+    else:
+        judul("MENGUKUR (5 lipatan per foto asli)")
+        tebak_cabang, tebak_satu, yakin_cabang = ukur(X, y, grup, bobot)
+        laporkan(X, y, tebak_cabang, tebak_satu)
+
+        judul("MELATIH MODEL AKHIR")
+        model = latih_dua_cabang(X, y, bobot)
     joblib.dump(model, arg.keluaran, compress=3)
     print(f"  Disimpan: {arg.keluaran.name} ({arg.keluaran.stat().st_size / 1048576:.1f} MB)")
     dua = dua_tangan_terlihat(X)
