@@ -23,17 +23,34 @@ Biaya tiap langkah:
 
 Kata baru diganti kalau biayanya cukup kecil: satu kesalahan untuk kata tiga
 huruf atau lebih, dan sedikit lebih longgar untuk kata panjang.
+
+Konteks percakapan (late fusion suara + isyarat)
+------------------------------------------------
+Ucapan lawan bicara yang diubah jadi teks oleh Whisper dikirim ke sini lewat
+tambah_konteks(). Kata-kata dari beberapa ucapan terakhir, ditambah kata yang
+terkait lewat topik_kata.txt, membuat kandidat itu lebih murah:
+
+    kata yang baru diucapkan lawan bicara   bonus 0.35
+    kata dari topik yang dipicu ucapan      bonus 0.20
+
+Kata yang terdengar ikut jadi kandidat walaupun tidak ada di kamus (nama
+orang, nama jalan, nama obat). Jadi keputusan kata akhir memakai dua
+modalitas: peluang huruf dari kamera dan isi ucapan dari mikrofon.
+Konteks hilang sendiri setelah UMUR_KONTEKS detik tanpa ucapan baru.
 """
 
 from __future__ import annotations
 
 import math
 import re
+import time
+import unicodedata
 from pathlib import Path
 
 FOLDER = Path(__file__).resolve().parent
 BERKAS_KAMUS = FOLDER / "kamus_kata.txt"
 BERKAS_PRIBADI = FOLDER / "kamus_pribadi.txt"
+BERKAS_TOPIK = FOLDER / "topik_kata.txt"
 
 BIAYA_GANTI_MIN = 0.3
 BIAYA_LEBIH = 1.0
@@ -47,6 +64,13 @@ BOBOT_FREKUENSI = 0.08
 # Kalau keduanya terlalu mirip, saran tetap tampil tapi tidak dipaksakan.
 SELISIH_YAKIN = 0.05
 
+# Konteks dari ucapan lawan bicara (lihat docstring di atas).
+BONUS_DENGAR = 0.35
+BONUS_TOPIK = 0.20
+UCAPAN_DIINGAT = 3          # berapa ucapan terakhir yang dipakai
+UMUR_KONTEKS = 120.0        # detik sejak ucapan terakhir sebelum konteks dilupakan
+MIN_PANJANG_KONTEKS = 3     # kata pendek (DI, KE, YA) tidak dijadikan konteks
+
 
 def baca_daftar_kata(berkas: Path) -> list[str]:
     """Satu kata per baris, baris diawali # diabaikan. Hanya huruf A-Z."""
@@ -58,6 +82,31 @@ def baca_daftar_kata(berkas: Path) -> list[str]:
         if baris and re.fullmatch(r"[A-Z]+", baris):
             kata.append(baris)
     return kata
+
+
+def baca_topik(berkas: Path) -> dict[str, set[str]]:
+    """Format satu baris:  PEMICU PEMICU2 = KATA KATA2 KATA3
+
+    Kalau salah satu pemicu terdengar, kata di kanan tanda = ikut jadi konteks.
+    """
+    topik: dict[str, set[str]] = {}
+    if not berkas.exists():
+        return topik
+    for baris in berkas.read_text(encoding="utf-8").splitlines():
+        baris = baris.split("#", 1)[0].strip().upper()
+        if "=" not in baris:
+            continue
+        kiri, kanan = baris.split("=", 1)
+        terkait = set(re.findall(r"[A-Z]+", kanan))
+        for pemicu in re.findall(r"[A-Z]+", kiri):
+            topik.setdefault(pemicu, set()).update(terkait)
+    return topik
+
+
+def pecah_kata(teks: str) -> list[str]:
+    """Teks bebas (hasil Whisper) jadi daftar kata A-Z huruf besar."""
+    teks = unicodedata.normalize("NFKD", teks).encode("ascii", "ignore").decode()
+    return re.findall(r"[A-Z]+", teks.upper())
 
 
 def batas_biaya(panjang: int) -> float:
@@ -73,7 +122,8 @@ class PengoreksiKata:
     """Menyimpan peluang tiap huruf di kata yang sedang dieja, lalu mencari kata kamus."""
 
     def __init__(self, daftar_kata: list[str], huruf_ditolak=(), aktif: bool = True,
-                 catat=None):
+                 catat=None, topik: dict[str, set[str]] | None = None,
+                 pakai_konteks: bool = True):
         self.aktif = aktif
         self.catat = catat
         self.huruf_ditolak = set(huruf_ditolak)
@@ -91,17 +141,68 @@ class PengoreksiKata:
         # Saran diminta tiap frame untuk layar, padahal teks jarang berubah.
         self._saran_simpan: tuple[str, list[str]] = ("", [])
 
+        # Konteks percakapan. Diisi dari utas tampilan, dibaca dari utas kamera,
+        # jadi _konteks selalu diganti utuh (satu penugasan), tidak diubah di tempat.
+        self.pakai_konteks = pakai_konteks
+        self.topik = topik or {}
+        self._ucapan: list[list[str]] = []
+        self._konteks: dict[str, float] = {}
+        self._konteks_waktu = 0.0
+        self._versi_konteks = 0
+
     @classmethod
-    def muat(cls, ambang_huruf: dict | None = None, aktif: bool = True, catat=None):
+    def muat(cls, ambang_huruf: dict | None = None, aktif: bool = True, catat=None,
+             pakai_konteks: bool = True):
         kata = baca_daftar_kata(BERKAS_PRIBADI) + baca_daftar_kata(BERKAS_KAMUS)
         ditolak = {h for h, a in (ambang_huruf or {}).items() if a >= 0.99}
-        diri = cls(kata, ditolak, aktif=aktif, catat=catat)
+        diri = cls(kata, ditolak, aktif=aktif, catat=catat,
+                   topik=baca_topik(BERKAS_TOPIK), pakai_konteks=pakai_konteks)
         if catat:
             catat.kabar("KAMUS", f"{len(diri.peringkat)} kata dimuat"
                                  + (f", huruf ditolak: {''.join(sorted(ditolak))}"
                                     if ditolak else "")
                                  + ("" if aktif else " (koreksi mati)"))
         return diri
+
+    # ------------------------------------------------- dari ucapan lawan bicara
+    def tambah_konteks(self, teks: str) -> None:
+        """Ucapan lawan bicara (teks Whisper atau ketikan) masuk ke konteks."""
+        if not self.pakai_konteks:
+            return
+        kata = [k for k in pecah_kata(teks) if len(k) >= MIN_PANJANG_KONTEKS]
+        if not kata:
+            return
+        if time.monotonic() - self._konteks_waktu > UMUR_KONTEKS:
+            self._ucapan = []
+        self._ucapan = (self._ucapan + [kata])[-UCAPAN_DIINGAT:]
+        baru: dict[str, float] = {}
+        for ucapan in self._ucapan:
+            for k in ucapan:
+                for t in self.topik.get(k, ()):
+                    baru[t] = max(baru.get(t, 0.0), BONUS_TOPIK)
+        for ucapan in self._ucapan:
+            for k in ucapan:
+                baru[k] = BONUS_DENGAR
+        self._konteks = baru
+        self._konteks_waktu = time.monotonic()
+        self._versi_konteks += 1
+        if self.catat:
+            dengar = sorted(k for k, b in baru.items() if b >= BONUS_DENGAR)
+            topik = sorted(k for k, b in baru.items() if b < BONUS_DENGAR)
+            self.catat.kabar("KONTEKS", f"dengar: {' '.join(dengar) or '-'}"
+                                        f" | topik: {' '.join(topik) or '-'}")
+
+    def lupakan_konteks(self) -> None:
+        self._ucapan = []
+        self._konteks = {}
+        self._versi_konteks += 1
+
+    def konteks_aktif(self) -> dict[str, float]:
+        if not self.pakai_konteks or not self._konteks:
+            return {}
+        if time.monotonic() - self._konteks_waktu > UMUR_KONTEKS:
+            return {}
+        return self._konteks
 
     # ------------------------------------------------------ dari loop kamera
     def catat_frame(self, kelas, peluang) -> None:
@@ -176,8 +277,12 @@ class PengoreksiKata:
     def _biaya_lewat(self, huruf: str) -> float:
         return BIAYA_LEWAT_DITOLAK if huruf in self.huruf_ditolak else BIAYA_LEWAT
 
-    def _skor(self, kata: str, biaya: float) -> float:
-        return biaya + BOBOT_FREKUENSI * self.peringkat[kata] / max(1, len(self.peringkat))
+    def _skor(self, kata: str, biaya: float, konteks: dict[str, float] | None = None) -> float:
+        if konteks is None:
+            konteks = self.konteks_aktif()
+        urutan = self.peringkat.get(kata, len(self.peringkat))
+        return (biaya + BOBOT_FREKUENSI * urutan / max(1, len(self.peringkat))
+                - konteks.get(kata, 0.0))
 
     def cari(self, teks: str, jumlah: int = 3, awalan: bool = False) -> list[tuple[str, float]]:
         """Kata kamus terdekat dengan kata terakhir di teks, urut dari yang terbaik.
@@ -191,26 +296,33 @@ class PengoreksiKata:
             return []
         n = len(huruf)
         batas = batas_biaya(n)
+        konteks = self.konteks_aktif()
+        # Kata yang terdengar tapi tidak ada di kamus ikut jadi kandidat.
+        tambahan = [k for k in konteks if k not in self.peringkat]
+        calon_semua = [k for panjang, daftar in self._per_panjang.items()
+                       if abs(panjang - n) <= 2 or (awalan and panjang > n)
+                       for k in daftar]
+        calon_semua += [k for k in tambahan
+                        if abs(len(k) - n) <= 2 or (awalan and len(k) > n)]
         hasil: list[tuple[str, float]] = []
-        for panjang, daftar in self._per_panjang.items():
-            if abs(panjang - n) > 2 and not (awalan and panjang > n):
-                continue
-            for k in daftar:
-                if awalan and len(k) > n:
-                    # Bandingkan dengan awal kata saja, sisanya belum dieja.
-                    biaya = self._biaya(huruf, k[:n], batas) + 0.05 * (len(k) - n)
-                else:
-                    biaya = self._biaya(huruf, k, batas)
-                if biaya <= batas:
-                    hasil.append((k, biaya))
-        hasil.sort(key=lambda kb: self._skor(*kb))
+        for k in calon_semua:
+            # Kata yang didukung ucapan boleh sedikit lebih jauh dari ejaannya.
+            b = batas + konteks.get(k, 0.0)
+            if awalan and len(k) > n:
+                # Bandingkan dengan awal kata saja, sisanya belum dieja.
+                biaya = self._biaya(huruf, k[:n], b) + 0.05 * (len(k) - n)
+            else:
+                biaya = self._biaya(huruf, k, b)
+            if biaya <= b:
+                hasil.append((k, biaya))
+        hasil.sort(key=lambda kb: self._skor(kb[0], kb[1], konteks))
         return hasil[:jumlah]
 
     def saran(self, teks: str, jumlah: int = 3) -> list[str]:
         """Saran untuk ditampilkan selama kata masih dieja."""
         if not self.aktif or not kata_terakhir(teks) or teks.endswith(" "):
             return []
-        kunci = f"{jumlah}|{teks}"
+        kunci = f"{jumlah}|{self._versi_konteks}|{teks}"
         if self._saran_simpan[0] != kunci:
             self._saran_simpan = (kunci, [k for k, _ in self.cari(teks, jumlah, awalan=True)])
         return self._saran_simpan[1]
@@ -218,12 +330,14 @@ class PengoreksiKata:
     def pengganti(self, teks: str) -> str | None:
         """Kata pengganti untuk kata terakhir, atau None kalau tidak perlu diganti."""
         kata = kata_terakhir(teks)
-        if not self.aktif or not kata or kata in self.peringkat:
+        konteks = self.konteks_aktif()
+        if not self.aktif or not kata or kata in self.peringkat or kata in konteks:
             return None
         calon = self.cari(teks, 2)
         if not calon:
             return None
-        if len(calon) > 1 and (self._skor(*calon[1]) - self._skor(*calon[0])
+        if len(calon) > 1 and (self._skor(calon[1][0], calon[1][1], konteks)
+                               - self._skor(calon[0][0], calon[0][1], konteks)
                                < SELISIH_YAKIN):
             return None                          # dua kandidat sama kuat, jangan menebak
         return calon[0][0]

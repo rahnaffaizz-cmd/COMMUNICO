@@ -1,0 +1,36 @@
+# Kata terkait per topik, untuk konteks percakapan (kamus.py).
+#
+# Format satu baris:
+#
+#     PEMICU PEMICU2 = KATA KATA2 KATA3
+#
+# Kalau salah satu kata di sebelah kiri terdengar dari ucapan lawan bicara,
+# semua kata di sebelah kanan ikut jadi konteks: kata itu lebih mudah menang
+# saat huruf isyarat salah terbaca. Kata di kanan tidak harus ada di
+# kamus_kata.txt, jadi di sini tempatnya menaruh nama obat, nama jalan, atau
+# istilah yang cuma muncul di percakapan tertentu.
+#
+# Bonusnya lebih kecil daripada kata yang benar-benar terdengar, karena
+# hubungannya lebih longgar. Huruf A-Z saja, baris diawali # diabaikan.
+#
+# Sesuaikan isinya dengan tempat alat ini dipakai. Daftar di bawah ini
+# contoh untuk apotek, warung, dan percakapan di jalan.
+
+# --- kesehatan dan apotek
+OBAT APOTEK RESEP = PARACETAMOL AMOXICILLIN IBUPROFEN ANTASIDA VITAMIN SIRUP TABLET KAPSUL SALEP DEMAM BATUK PUSING
+SAKIT DEMAM PUSING BATUK = OBAT APOTEK DOKTER KEPALA PERUT DEMAM BATUK PUSING TIDUR
+DOKTER PUSKESMAS RUMAHSAKIT = DOKTER APOTEK OBAT ALAMAT NOMOR ANTRI
+
+# --- warung dan belanja
+BELI HARGA BAYAR = UANG BERAPA KEMBALI RIBU RATUS MURAH MAHAL
+WARUNG TOKO PASAR = BERAS GULA KOPI TEH MINYAK TELUR MIE ROTI NASI AIR
+MAKAN MINUM = NASI ROTI TEH AIR MIE TELUR GULA KOPI
+
+# --- jalan dan arah
+JALAN ALAMAT ARAH = MERDEKA SUDIRMAN DIPONEGORO PAJAJARAN SILIWANGI GANG NOMOR BELOK KANAN KIRI LURUS
+KENDARAAN NAIK ANGKOT = MOTOR ANGKOT STASIUN TERMINAL OJEK HALTE
+RUMAH PULANG = ALAMAT JALAN NOMOR GANG DEKAT JAUH
+
+# --- sekolah
+SEKOLAH KELAS GURU = BUKU TULIS PENSIL TUGAS GURU KELAS TEMAN ISTIRAHAT
+NAMA KENALAN SIAPA = NAMA PANGGIL KELAS SEKOLAH

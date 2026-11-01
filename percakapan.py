@@ -42,6 +42,10 @@ Kata yang dieja dicocokkan dengan kamus_kata.txt (lihat kamus.py). Kalau satu
 huruf salah terbaca, kata itu diganti dengan kata kamus terdekat begitu kata
 selesai. Matikan dengan --tanpa-koreksi.
 
+Ucapan lawan bicara (suara lewat Whisper, atau ketikan) juga dipakai sebagai
+konteks untuk koreksi itu: kata yang baru diucapkan, dan kata terkait di
+topik_kata.txt, lebih mudah menang. Matikan dengan --tanpa-konteks.
+
 Pesan isyarat terkirim sendiri kalau tidak ada huruf baru selama --ucap-setelah
 detik (bawaan 4). Antar huruf diberi jeda --jeda detik (bawaan 2,7) supaya
 ada waktu berganti bentuk tangan. Pembacaan hurufnya memakai bagian yang sama dengan
@@ -770,8 +774,15 @@ class Aplikasi:
         self.akar.bind("<Control-z>", lambda _e: self.pekerja.perintah.put("batal"))
 
     # ---- pesan
+    def _kamus(self):
+        penyusun = getattr(self.pekerja, "penyusun", None)
+        return getattr(penyusun, "kamus", None)
+
     def tambah_pesan(self, pembicara: str, teks: str, via: str = "") -> None:
         pesan = self.riwayat.tambah(pembicara, teks, via)
+        kamus = self._kamus()
+        if pembicara == "dengar" and kamus is not None:
+            kamus.tambah_konteks(teks)     # suara lawan bicara jadi konteks ejaan isyarat
         self.obrolan.tambah(pesan)
         self.catat.kabar("PESAN", f"{pembicara}: {teks}")
         if pembicara == "tuli":
@@ -785,6 +796,9 @@ class Aplikasi:
         """Kosongkan riwayat di layar. Catatan di log/ tetap ada."""
         self.obrolan.kosongkan()
         self.riwayat.kosongkan_layar()
+        kamus = self._kamus()
+        if kamus is not None:
+            kamus.lupakan_konteks()
         self.catat.kabar("PESAN", "percakapan di layar dibersihkan")
         if self.mode.get() == "ketik":
             self.ketik.focus_set()
@@ -913,6 +927,8 @@ def baca_argumen(argv=None) -> argparse.Namespace:
                    help="abaikan ambang per huruf, pakai --min-keyakinan untuk semua")
     p.add_argument("--tanpa-koreksi", action="store_true",
                    help="jangan koreksi kata dengan kamus_kata.txt")
+    p.add_argument("--tanpa-konteks", action="store_true",
+                   help="ucapan lawan bicara tidak dipakai sebagai konteks koreksi kata")
     p.add_argument("--model-ucapan", default="id-base",
                    help="model pengenal suara (CPU, int8). id-base/id-small disetel "
                         "untuk bahasa Indonesia; untuk bahasa lain pakai tiny/base/small/medium")
@@ -956,7 +972,8 @@ def utama() -> int:
                             arg.jeda, catat=catat, ambang_huruf=ambang)
     from kamus import PengoreksiKata
     kamus = PengoreksiKata.muat(gv.muat_ambang_huruf(nama_model=arg.model),
-                                aktif=not arg.tanpa_koreksi, catat=catat)
+                                aktif=not arg.tanpa_koreksi, catat=catat,
+                                pakai_konteks=not arg.tanpa_konteks)
     penyusun = PenyusunTeks(model, voting, catat, ucap_setelah=arg.ucap_setelah,
                             spasi_setelah=arg.spasi_setelah,
                             tahan_tangan_hilang=arg.tahan_tangan_hilang,
